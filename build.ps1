@@ -1,0 +1,130 @@
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$stagingName = '__wsl_builder'
+$imageReference = 'ubuntu:24.04'
+$cranePath = Join-Path $scriptRoot 'crane.exe'
+$workingDirectory = $null
+$stagingImported = $false
+$artifactTemp = $null
+
+function Invoke-Checked {
+    param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][string[]]$ArgumentList, [string]$Phase = 'external command')
+    & $FilePath @ArgumentList
+    if ($LASTEXITCODE -ne 0) { throw "$Phase failed with exit code $LASTEXITCODE" }
+}
+
+function Get-DistroNames {
+    $lines = & wsl.exe --list --quiet
+    if ($LASTEXITCODE -ne 0) { throw 'wsl --list --quiet failed' }
+    @($lines | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
+}
+
+function Invoke-WslOutput {
+    param([Parameter(Mandatory)][string[]]$ArgumentList, [string]$Phase = 'WSL command')
+    $lines = @(& wsl.exe @ArgumentList)
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) { throw "$Phase failed with exit code $exitCode" }
+    (($lines | ForEach-Object { [string]$_ }) -join "`n").Replace("`0", '').Trim()
+}
+
+function Remove-StagingDistro {
+    try { Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging distro termination' } catch { }
+    try { Invoke-Checked wsl.exe @('--unregister', $stagingName) 'staging distro cleanup' } catch { }
+}
+
+try {
+    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe was not found' }
+    if (-not (Test-Path -LiteralPath $cranePath -PathType Leaf)) { throw "crane.exe was not found beside build.ps1: $cranePath" }
+    foreach ($requiredPath in @(
+        (Join-Path $scriptRoot 'provision.sh'),
+        (Join-Path $scriptRoot 'files/wsl.conf'),
+        (Join-Path $scriptRoot 'files/wsl-distribution.conf')
+    )) {
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) { throw "required project file is missing: $requiredPath" }
+    }
+    $help = (& wsl.exe --help | Out-String)
+    # Some WSL builds return -1 for the help display under Windows PowerShell's
+    # native UTF-16 console bridge despite emitting complete help text. Treat a
+    # non-empty help response as usable, but never relax checks for real actions.
+    if ($LASTEXITCODE -ne 0 -and [string]::IsNullOrWhiteSpace($help)) { throw 'wsl --help failed' }
+    $help = $help -replace "`0", ''
+    foreach ($option in @('--import', '--export', '--terminate', '--unregister', '--version')) {
+        if ($help -notmatch [regex]::Escape($option)) { throw "installed WSL does not advertise required option $option" }
+    }
+    & wsl.exe --version *> $null
+    if ($LASTEXITCODE -ne 0) { throw 'WSL --version is unavailable; update WSL before building' }
+    $distros = Get-DistroNames
+    if ($distros -contains $stagingName) { Write-Host "Removing reserved staging distro $stagingName"; Remove-StagingDistro }
+
+    $workingDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("wsl-builder-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $workingDirectory -Force | Out-Null
+    $rootfsTar = Join-Path $workingDirectory 'rootfs.tar'
+    $storagePath = Join-Path $workingDirectory 'storage'
+    New-Item -ItemType Directory -Path $storagePath -Force | Out-Null
+
+    Write-Host "[1/6] Exporting $imageReference with crane"
+    $architecture = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
+    Invoke-Checked $cranePath @('--platform', "linux/$architecture", 'export', $imageReference, $rootfsTar) 'crane export'
+
+    Write-Host '[2/6] Importing rootfs into WSL2'
+    Invoke-Checked wsl.exe @('--import', $stagingName, $storagePath, $rootfsTar, '--version', '2') 'WSL import'
+    $stagingImported = $true
+
+    Write-Host '[3/6] Copying provisioning inputs'
+    $linuxConfigDir = '/tmp/wsl-builder-files'
+    $provisionContent = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $scriptRoot 'provision.sh')))
+    $wslConfig = Join-Path $scriptRoot 'files/wsl.conf'
+    $wslDistributionConfig = Join-Path $scriptRoot 'files/wsl-distribution.conf'
+    $configPayloads = @{
+        '/tmp/provision.sh' = $provisionContent
+        "$linuxConfigDir/wsl.conf" = [Convert]::ToBase64String([IO.File]::ReadAllBytes($wslConfig))
+        "$linuxConfigDir/wsl-distribution.conf" = [Convert]::ToBase64String([IO.File]::ReadAllBytes($wslDistributionConfig))
+    }
+    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '-lc', "install -d -m 0755 $linuxConfigDir") 'staging input directory creation'
+    foreach ($destination in $configPayloads.Keys) {
+        $payload = $configPayloads[$destination]
+        $command = "echo $payload | base64 -d > '$destination'"
+        Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '-lc', $command) "copying $destination"
+    }
+
+    Write-Host '[4/6] Provisioning and validating Linux image'
+    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '/tmp/provision.sh', $linuxConfigDir) 'Linux provisioning'
+    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '-lc', 'dpkg --audit; test -f /etc/wsl.conf; test -f /etc/wsl-distribution.conf') 'final Linux validation'
+
+    Write-Host '[5/6] Restarting for WSL default-user validation'
+    Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before validation'
+    $defaultIdentity = Invoke-WslOutput @('-d', $stagingName, '--', 'id', '-un') 'default-user validation'
+    if ($defaultIdentity -ne 'ubuntu') { throw "default WSL user validation failed (got '$defaultIdentity')" }
+    $defaultUid = Invoke-WslOutput @('-d', $stagingName, '--', 'id', '-u') 'default-UID validation'
+    if ($defaultUid -ne '1000') { throw "default UID validation failed (got '$defaultUid')" }
+    Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
+
+    Write-Host '[6/6] Exporting final artifact'
+    Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before export'
+    $date = Get-Date -Format 'yyyy-MM-dd'
+    $index = 1
+    do {
+        $suffix = if ($index -eq 1) { '' } else { "-$index" }
+        $artifact = Join-Path $scriptRoot "ubuntu-dev-$date$suffix.wsl"
+        $index++
+    } while (Test-Path -LiteralPath $artifact)
+    $artifactTemp = Join-Path $workingDirectory 'artifact.wsl.partial'
+    Invoke-Checked wsl.exe @('--export', $stagingName, $artifactTemp) 'WSL export'
+    if (-not (Test-Path -LiteralPath $artifactTemp -PathType Leaf)) { throw 'WSL export did not produce an artifact' }
+    Invoke-Checked wsl.exe @('--unregister', $stagingName) 'staging distro cleanup'
+    $stagingImported = $false
+    Move-Item -LiteralPath $artifactTemp -Destination $artifact
+    $artifactTemp = $null
+    Write-Host "Build succeeded: $artifact"
+}
+catch {
+    Write-Error "Build failed: $($_.Exception.Message)"
+    exit 1
+}
+finally {
+    if ($stagingImported) { Remove-StagingDistro }
+    if ($artifactTemp -and (Test-Path -LiteralPath $artifactTemp)) { Remove-Item -LiteralPath $artifactTemp -Force -ErrorAction SilentlyContinue }
+    if ($workingDirectory -and (Test-Path -LiteralPath $workingDirectory)) { Remove-Item -LiteralPath $workingDirectory -Recurse -Force -ErrorAction SilentlyContinue }
+}
