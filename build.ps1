@@ -1,3 +1,7 @@
+param(
+    [switch]$KeepStagingOnFailure
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -5,9 +9,11 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $stagingName = '__wsl_builder'
 $imageReference = 'ubuntu:24.04'
 $cranePath = Join-Path $scriptRoot 'crane.exe'
+$tarPath = (Get-Command tar.exe -ErrorAction SilentlyContinue).Source
 $workingDirectory = $null
 $stagingImported = $false
 $artifactTemp = $null
+$preserveStaging = $false
 
 function Invoke-Checked {
     param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][string[]]$ArgumentList, [string]$Phase = 'external command')
@@ -37,6 +43,7 @@ function Remove-StagingDistro {
 try {
     if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe was not found' }
     if (-not (Test-Path -LiteralPath $cranePath -PathType Leaf)) { throw "crane.exe was not found beside build.ps1: $cranePath" }
+    if ([string]::IsNullOrWhiteSpace($tarPath)) { throw 'tar.exe was not found; it is required to add provisioning inputs to the disposable rootfs archive' }
     foreach ($requiredPath in @(
         (Join-Path $scriptRoot 'provision.sh'),
         (Join-Path $scriptRoot 'files/wsl.conf'),
@@ -68,30 +75,26 @@ try {
     $architecture = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
     Invoke-Checked $cranePath @('--platform', "linux/$architecture", 'export', $imageReference, $rootfsTar) 'crane export'
 
-    Write-Host '[2/6] Importing rootfs into WSL2'
+    Write-Host '[2/6] Adding provisioning inputs to disposable rootfs archive'
+    $linuxConfigDir = '/opt/wsl-dev-builder/files'
+    $provisionPath = '/opt/wsl-dev-builder/provision.sh'
+    $wslConfig = Join-Path $scriptRoot 'files/wsl.conf'
+    $wslDistributionConfig = Join-Path $scriptRoot 'files/wsl-distribution.conf'
+    $overlayDirectory = Join-Path $workingDirectory 'rootfs-overlay'
+    New-Item -ItemType Directory -Path (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $scriptRoot 'provision.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/provision.sh')
+    Copy-Item -LiteralPath $wslConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl.conf')
+    Copy-Item -LiteralPath $wslDistributionConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl-distribution.conf')
+    Invoke-Checked $tarPath @('-rf', $rootfsTar, '-C', $overlayDirectory, 'opt/wsl-dev-builder/provision.sh', 'opt/wsl-dev-builder/files/wsl.conf', 'opt/wsl-dev-builder/files/wsl-distribution.conf') 'adding provisioning inputs to rootfs archive'
+
+    Write-Host '[3/6] Importing rootfs into WSL2'
     Invoke-Checked wsl.exe @('--import', $stagingName, $storagePath, $rootfsTar, '--version', '2') 'WSL import'
     $stagingImported = $true
 
-    Write-Host '[3/6] Copying provisioning inputs'
-    $linuxConfigDir = '/tmp/wsl-builder-files'
-    $provisionContent = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $scriptRoot 'provision.sh')))
-    $wslConfig = Join-Path $scriptRoot 'files/wsl.conf'
-    $wslDistributionConfig = Join-Path $scriptRoot 'files/wsl-distribution.conf'
-    $configPayloads = @{
-        '/tmp/provision.sh' = $provisionContent
-        "$linuxConfigDir/wsl.conf" = [Convert]::ToBase64String([IO.File]::ReadAllBytes($wslConfig))
-        "$linuxConfigDir/wsl-distribution.conf" = [Convert]::ToBase64String([IO.File]::ReadAllBytes($wslDistributionConfig))
-    }
-    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '-lc', "install -d -m 0755 $linuxConfigDir") 'staging input directory creation'
-    foreach ($destination in $configPayloads.Keys) {
-        $payload = $configPayloads[$destination]
-        $command = "echo $payload | base64 -d > '$destination'"
-        Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '-lc', $command) "copying $destination"
-    }
-
     Write-Host '[4/6] Provisioning and validating Linux image'
-    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '/tmp/provision.sh', $linuxConfigDir) 'Linux provisioning'
+    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', $provisionPath, $linuxConfigDir) 'Linux provisioning'
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '-lc', 'dpkg --audit; test -f /etc/wsl.conf; test -f /etc/wsl-distribution.conf') 'final Linux validation'
+    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', 'bash', '-i', '-c', 'set -e; command -v node; node --version; command -v npm; npm --version; command -v codex; codex --version') 'fresh ubuntu shell tooling validation'
 
     Write-Host '[5/6] Restarting for WSL default-user validation'
     Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before validation'
@@ -120,11 +123,12 @@ try {
     Write-Host "Build succeeded: $artifact"
 }
 catch {
+    $preserveStaging = $KeepStagingOnFailure.IsPresent
     Write-Error "Build failed: $($_.Exception.Message)"
     exit 1
 }
 finally {
-    if ($stagingImported) { Remove-StagingDistro }
+    if ($stagingImported -and -not $preserveStaging) { Remove-StagingDistro }
     if ($artifactTemp -and (Test-Path -LiteralPath $artifactTemp)) { Remove-Item -LiteralPath $artifactTemp -Force -ErrorAction SilentlyContinue }
     if ($workingDirectory -and (Test-Path -LiteralPath $workingDirectory)) { Remove-Item -LiteralPath $workingDirectory -Recurse -Force -ErrorAction SilentlyContinue }
 }

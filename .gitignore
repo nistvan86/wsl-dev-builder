@@ -11,6 +11,7 @@ crane.exe
 # Project-local temporary staging directories
 .wsl-builder-*/
 wsl-builder-*/
+.wsl-temp-dev/
 
 # PowerShell and test output
 *.log
