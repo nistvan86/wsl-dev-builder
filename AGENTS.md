@@ -25,7 +25,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 
 ## Build and artifact invariants
 
-- Resolve project-relative paths from the script location, never the caller's working directory.
+- Resolve project-relative paths from the script location, never the caller's working directory. In companion replay commands, record project-contained output directories relative to `build.ps1`.
 - Use strict, fail-fast PowerShell and Bash behavior. Check every native command exit status.
 - Provisioning and every required validation are fail-closed: a failure must prevent export.
 - Export to a temporary location first; only move a successful export to its final artifact name.

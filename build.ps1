@@ -69,6 +69,18 @@ function ConvertTo-PowerShellArrayLiteral {
     '@(' + (($Values | ForEach-Object { ConvertTo-PowerShellLiteral $_ }) -join ', ') + ')'
 }
 
+function Get-ProjectRelativePath {
+    param([Parameter(Mandatory)][string]$Path)
+    $projectRoot = [System.IO.Path]::GetFullPath($scriptRoot).TrimEnd('\', '/')
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    if ($fullPath.Equals($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) { return '.' }
+    $projectPrefix = $projectRoot + [System.IO.Path]::DirectorySeparatorChar
+    if ($fullPath.StartsWith($projectPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return '.\' + $fullPath.Substring($projectPrefix.Length)
+    }
+    $fullPath
+}
+
 function Invoke-Checked {
     param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][string[]]$ArgumentList, [string]$Phase = 'external command')
     & $FilePath @ArgumentList
@@ -112,8 +124,10 @@ try {
     foreach ($package in $selectedPackages) { if ($package -notmatch '^[a-z][a-z0-9-]*$') { throw "invalid package module: $package" } }
     $configuredDistributionDirectory = if ($settings.ContainsKey('DistributionDirectory')) { [string]$settings['DistributionDirectory'] } else { './dist' }
     $requestedDistributionDirectory = if ($DistributionDirectory) { $DistributionDirectory } else { $configuredDistributionDirectory }
+    # Non-absolute output paths are always project-relative, not caller-relative.
     $distributionPath = if ([System.IO.Path]::IsPathRooted($requestedDistributionDirectory)) { $requestedDistributionDirectory } else { Join-Path $scriptRoot $requestedDistributionDirectory }
     $distributionPath = [System.IO.Path]::GetFullPath($distributionPath)
+    $replayDistributionDirectory = Get-ProjectRelativePath $distributionPath
     $date = Get-Date -Format 'yyyy-MM-dd'
     $artifact = Join-Path $distributionPath "$ImageName.wsl"
     $manifestPath = "$artifact.txt"
@@ -220,7 +234,7 @@ try {
     }
     $rebuildCommand = @(
         '& .\build.ps1 `'
-        "  -DistributionDirectory $(ConvertTo-PowerShellLiteral $distributionPath) ``"
+        "  -DistributionDirectory $(ConvertTo-PowerShellLiteral $replayDistributionDirectory) ``"
         "  -BaseUtilities $(ConvertTo-PowerShellArrayLiteral $selectedBaseUtilities) ``"
         "  -Packages $(ConvertTo-PowerShellArrayLiteral $selectedPackages) ``"
         "  -ImageName $(ConvertTo-PowerShellLiteral $ImageName) ``"
