@@ -103,9 +103,10 @@ log 'unminimizing Ubuntu'
 set +o pipefail; printf 'y\n' | unminimize; unminimize_status=${PIPESTATUS[1]}; set -o pipefail
 (( unminimize_status == 0 )) || die "unminimize failed with status $unminimize_status"
 
-CORE_SYSTEM_PACKAGES=(locales systemd systemd-sysv dbus libcap2-bin ca-certificates apt-utils)
+CORE_SYSTEM_PACKAGES=(locales systemd systemd-sysv dbus ca-certificates apt-utils)
+BUILD_AUDIT_PACKAGES=(libcap2-bin)
 log 'installing base utilities and module system dependencies'
-apt-get install -y --no-install-recommends "${CORE_SYSTEM_PACKAGES[@]}" "${BASE_UTILITIES[@]}" "${MODULE_SYSTEM_PACKAGES[@]}"
+apt-get install -y --no-install-recommends "${CORE_SYSTEM_PACKAGES[@]}" "${BUILD_AUDIT_PACKAGES[@]}" "${BASE_UTILITIES[@]}" "${MODULE_SYSTEM_PACKAGES[@]}"
 
 log 'configuring locale'
 if [[ -f /etc/locale.gen ]]; then sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; locale-gen en_US.UTF-8; fi
