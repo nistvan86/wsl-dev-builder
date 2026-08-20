@@ -2,4 +2,5 @@
 *.conf text eol=lf
 onboard-agent-distro text eol=lf
 *.psd1 text eol=lf
+build.settings.psd1.example text eol=lf
 *.txt text eol=lf
