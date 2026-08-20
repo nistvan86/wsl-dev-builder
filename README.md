@@ -25,7 +25,7 @@ From this directory, run:
 
 The successful output is `ubuntu-dev-YYYY-MM-DD.wsl`. Existing artifacts are never overwritten; later builds on the same date receive `-2`, `-3`, and so on. Each image includes Codex CLI from OpenAI's official standalone installer, the latest Node.js LTS installed through `nvm` for the `ubuntu` user, and `bubblewrap`, `make`, and `pkg-config`. Node is intentionally included for general developer tooling, skills, and documentation workflows; Codex itself is not installed with npm.
 
-This isolation branch disables automatic Windows filesystem mounts, `/etc/fstab` processing, Windows executable interop, and Windows PATH injection. A normal image therefore has no `/mnt/c` or `/mnt/d` and cannot launch Windows executables. These settings do not prevent Linux root from manually mounting DrvFs; later hardening stages remove runtime privilege escalation and test that manual mounts fail for `ubuntu`.
+This isolation branch disables automatic Windows filesystem mounts, `/etc/fstab` processing, Windows executable interop, Windows PATH injection, and per-distro GPU integration. It also removes SUID/SGID bits from runtime files and rejects high-risk Linux file capabilities during provisioning. A normal image therefore has no `/mnt/c` or `/mnt/d` and cannot launch Windows executables. These settings do not prevent Linux root from manually mounting DrvFs; later hardening stages remove runtime privilege escalation and test that manual mounts fail for `ubuntu`.
 
 The reserved temporary WSL distro name is `__wsl_builder`. The builder may unregister exactly that name at startup or during cleanup, so do not use it for another purpose.
 

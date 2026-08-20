@@ -13,12 +13,8 @@ export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 
 log 'updating package indexes'; apt-get update
 log 'upgrading the base image'; apt-get -y upgrade
-command -v unminimize >/dev/null || die 'unminimize is unavailable in the supplied Ubuntu base image'
-log 'unminimizing Ubuntu'
-set +o pipefail; printf 'y\n' | unminimize; unminimize_status=${PIPESTATUS[1]}; set -o pipefail
-(( unminimize_status == 0 )) || die "unminimize failed with status $unminimize_status"
 log 'installing required packages'
-apt-get install -y --no-install-recommends locales systemd systemd-sysv dbus ca-certificates apt-utils "${BASE_UTILITIES[@]}"
+apt-get install -y --no-install-recommends locales systemd systemd-sysv dbus libcap2-bin ca-certificates apt-utils "${BASE_UTILITIES[@]}"
 log 'configuring locale'
 if [[ -f /etc/locale.gen ]]; then sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; locale-gen en_US.UTF-8; fi
 update-locale LANG=en_US.UTF-8
@@ -88,6 +84,14 @@ EOF
 
 runuser -u ubuntu -- env HOME=/home/ubuntu NVM_DIR=/home/ubuntu/.nvm bash -c 'set -Eeuo pipefail; export PATH="$HOME/.local/bin:$PATH"; . "$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; nvm --version; node --version; npm --version; command -v codex; codex --version' >/dev/null || die 'ubuntu developer tooling validation failed'
 
+log 'auditing and stripping SUID/SGID runtime files'
+find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print
+find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -exec chmod u-s,g-s {} +
+if find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print -quit | grep -q .; then die 'SUID or SGID runtime file remains'; fi
+log 'auditing Linux file capabilities'
+capability_audit=$(getcap -r / 2>/dev/null || true)
+printf '%s\n' "$capability_audit"
+if printf '%s\n' "$capability_audit" | grep -Eiq 'cap_(sys_admin|dac_override|dac_read_search|sys_ptrace|sys_module|sys_rawio|setuid|setgid)'; then die 'high-risk Linux file capability detected'; fi
 log 'installing WSL configuration'
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl.conf" /etc/wsl.conf
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl-distribution.conf" /etc/wsl-distribution.conf
@@ -113,7 +117,8 @@ for unit in systemd-resolved.service systemd-networkd.service NetworkManager.ser
 log 'cleaning apt metadata'; rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 log 'validating the provisioned image'
 source /etc/os-release; [[ "${ID:-}" == ubuntu && "${VERSION_ID:-}" == 24.04 ]] || die 'image is not Ubuntu 24.04'
-for package in dbus "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
+for package in dbus libcap2-bin "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
+command -v getcap >/dev/null || die 'getcap is unavailable'
 ! command -v sudo || die 'sudo must not be installed'
 command -v systemd >/dev/null; command -v systemctl >/dev/null
 for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
