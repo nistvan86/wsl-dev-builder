@@ -83,7 +83,7 @@ try {
     if (Test-Path -LiteralPath $settingsPath -PathType Leaf) {
         $settings = Import-PowerShellDataFile -LiteralPath $settingsPath
         $allowedSettings = @('DistributionDirectory', 'BaseUtilities', 'Packages')
-        foreach ($key in $settings.Keys) { if ($key -notin $allowedSettings) { throw "unsupported setting in $settingsPath: $key" } }
+        foreach ($key in $settings.Keys) { if ($key -notin $allowedSettings) { throw "unsupported setting in ${settingsPath}: $key" } }
     }
     $configuredBaseUtilities = if ($settings.ContainsKey('BaseUtilities')) { ConvertTo-StringArray $settings['BaseUtilities'] 'BaseUtilities' } else { $defaultBaseUtilities }
     $configuredPackages = if ($settings.ContainsKey('Packages')) { ConvertTo-StringArray $settings['Packages'] 'Packages' } else { $defaultPackages }
