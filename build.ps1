@@ -123,6 +123,8 @@ if mount -t drvfs C: "$mount_test" 2>/dev/null; then
 fi
 '@
     Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $mountInteropValidation) 'mount and Windows interop isolation validation'
+    $forbiddenGroups = 'sudo wheel docker lxd disk libvirt kvm'
+    Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', "set -eu; groups=\`$(id -nG); for group in $forbiddenGroups; do case \" \`$groups \" in *\" \`$group \"*) echo \"forbidden group present: \`$group\" >&2; exit 1;; esac; done; ! command -v sudo") 'runtime privilege validation'
     Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
 
     Write-Host '[6/6] Exporting final artifact'

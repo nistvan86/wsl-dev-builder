@@ -34,7 +34,7 @@ The reserved temporary WSL distro name is `__wsl_builder`. The builder may unreg
 ```powershell
 wsl --install --from-file .\ubuntu-dev-YYYY-MM-DD.wsl --name __wsl_poc_test
 wsl -d __wsl_poc_test -- id
-wsl -d __wsl_poc_test -- sudo -n true
+wsl -d __wsl_poc_test -- bash -lc 'command -v sudo && exit 1 || exit 0'
 wsl -d __wsl_poc_test -- systemctl is-system-running
 wsl --unregister __wsl_poc_test
 ```
@@ -61,3 +61,5 @@ Image selection compares the date and same-day build number in the filename, not
 For GitHub, bootstrap reuses a usable authenticated Windows `gh` token through stdin when available. Otherwise it runs GitHub CLI's interactive HTTPS login inside the new distro, then configures and validates Git operations. Codex authentication always runs interactively inside the distro with `codex login --device-auth`, followed by `codex login status`.
 
 Authentication is per developer instance; credentials are never copied into or seeded in `.wsl` artifacts. If authentication fails after WSL installation, bootstrap returns a failure but intentionally leaves the created distro registered so you can fix the login and retry.
+
+The runtime `ubuntu` user has no `sudo` executable and is rejected if it belongs to `sudo`, `wheel`, `docker`, `lxd`, `disk`, `libvirt`, or `kvm`. Root and ubuntu password authentication is locked; trusted Windows maintenance can still use `wsl -d <distro-name> -u root` explicitly.

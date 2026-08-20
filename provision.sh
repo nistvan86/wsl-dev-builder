@@ -18,14 +18,19 @@ log 'unminimizing Ubuntu'
 set +o pipefail; printf 'y\n' | unminimize; unminimize_status=${PIPESTATUS[1]}; set -o pipefail
 (( unminimize_status == 0 )) || die "unminimize failed with status $unminimize_status"
 log 'installing required packages'
-apt-get install -y --no-install-recommends sudo locales systemd systemd-sysv dbus ca-certificates apt-utils "${BASE_UTILITIES[@]}"
+apt-get install -y --no-install-recommends locales systemd systemd-sysv dbus ca-certificates apt-utils "${BASE_UTILITIES[@]}"
 log 'configuring locale'
 if [[ -f /etc/locale.gen ]]; then sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; locale-gen en_US.UTF-8; fi
 update-locale LANG=en_US.UTF-8
 getent passwd ubuntu >/dev/null || die 'required user ubuntu is missing'
 ubuntu_uid=$(id -u ubuntu); ubuntu_gid=$(id -g ubuntu)
 [[ "$ubuntu_uid" == 1000 && "$ubuntu_gid" == 1000 ]] || die 'ubuntu must have UID/GID 1000'
-getent group ubuntu >/dev/null || die 'required group ubuntu is missing'; usermod -aG sudo ubuntu
+getent group ubuntu >/dev/null || die 'required group ubuntu is missing'
+for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
+  if id -nG ubuntu | tr ' ' '\n' | grep -Fxq "$forbidden_group"; then die "ubuntu is a member of forbidden group: $forbidden_group"; fi
+done
+passwd -l root >/dev/null || die 'failed to lock root password'
+passwd -l ubuntu >/dev/null || die 'failed to lock ubuntu password'
 
 if is_wsl_environment; then
   log 'configuring WSL-aware ubuntu prompt'
@@ -100,17 +105,19 @@ validate_isolation_config() {
   [[ "${automount_enabled:-true}" == false && "${automount_fstab:-true}" == false && "${interop_enabled:-true}" == false && "${interop_path:-true}" == false ]] || die '/etc/wsl.conf does not disable automount and Windows interop'
 }
 validate_isolation_config
-install -d -o root -g root -m 0755 /etc/sudoers.d
-cat > /etc/sudoers.d/ubuntu <<'EOF'
-ubuntu ALL=(ALL) NOPASSWD:ALL
-EOF
-chmod 0440 /etc/sudoers.d/ubuntu
+
 for unit in systemd-resolved.service systemd-networkd.service NetworkManager.service systemd-tmpfiles-setup.service systemd-tmpfiles-clean.service systemd-tmpfiles-clean.timer systemd-tmpfiles-setup-dev-early.service systemd-tmpfiles-setup-dev.service tmp.mount; do ln -sfn /dev/null "/etc/systemd/system/$unit"; done
 log 'cleaning apt metadata'; rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 log 'validating the provisioned image'
 source /etc/os-release; [[ "${ID:-}" == ubuntu && "${VERSION_ID:-}" == 24.04 ]] || die 'image is not Ubuntu 24.04'
-for package in sudo dbus "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
-command -v systemd >/dev/null; command -v systemctl >/dev/null; visudo -cf /etc/sudoers >/dev/null; visudo -cf /etc/sudoers.d/ubuntu >/dev/null
+for package in dbus "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
+! command -v sudo || die 'sudo must not be installed'
+command -v systemd >/dev/null; command -v systemctl >/dev/null
+for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
+  if id -nG ubuntu | tr ' ' '\n' | grep -Fxq "$forbidden_group"; then die "ubuntu is a member of forbidden group: $forbidden_group"; fi
+done
+[[ "$(passwd -S root | awk '{print $2}')" == L* ]] || die 'root password is not locked'
+[[ "$(passwd -S ubuntu | awk '{print $2}')" == L* ]] || die 'ubuntu password is not locked'
 [[ "$(stat -c '%u:%g:%a' /etc/wsl.conf)" == '0:0:644' ]] || die '/etc/wsl.conf has incorrect metadata'
 [[ -z "$(dpkg --audit)" ]] || die 'dpkg reports unfinished transactions'
 if is_wsl_environment; then grep -Fq WSL_DISTRO_NAME /home/ubuntu/.bashrc || die 'WSL prompt missing'; ! grep -Fq __wsl_builder /home/ubuntu/.bashrc || die 'staging name leaked'; fi
