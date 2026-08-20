@@ -29,6 +29,7 @@ if (-not $tarPath) {
 $workingDirectory = $null
 $stagingImported = $false
 $artifactTemp = $null
+$manifestTemp = $null
 $preserveStaging = $false
 $defaultBaseUtilities = @('build-essential', 'g++', 'git', 'gh', 'make', 'mc', 'wget', 'curl', 'pkg-config')
 $defaultPackages = @('github', 'nodejs', 'codex')
@@ -179,6 +180,8 @@ try {
     if ($defaultUid -ne '1000') { throw "default UID validation failed (got '$defaultUid')" }
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
     Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
+    $resolvedModules = Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'cat', '/usr/local/lib/wsl-dev-builder/image-modules.txt') 'image module manifest retrieval'
+    $installedSystemPackages = Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'cat', '/usr/local/lib/wsl-dev-builder/installed-system-packages.txt') 'installed package manifest retrieval'
 
     Write-Host '[6/6] Exporting final artifact'
     Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before export'
@@ -189,14 +192,28 @@ try {
         $suffix = if ($index -eq 1) { '' } else { "-$index" }
         $artifact = Join-Path $distributionPath "ubuntu-dev-$date$suffix.wsl"
         $index++
-    } while (Test-Path -LiteralPath $artifact)
+    } while ((Test-Path -LiteralPath $artifact) -or (Test-Path -LiteralPath "$artifact.txt"))
     $artifactTemp = Join-Path $workingDirectory 'artifact.wsl.partial'
+    $manifestTemp = Join-Path $workingDirectory 'artifact.wsl.txt.partial'
+    $manifestLines = @(
+        'WSL Dev Builder image manifest'
+        ''
+        "Ubuntu base image: $imageReference"
+        ''
+        'Installed modules:'
+    ) + @($resolvedModules -split "`n") + @(
+        ''
+        'Installed system packages:'
+    ) + @($installedSystemPackages -split "`n")
+    [System.IO.File]::WriteAllLines($manifestTemp, $manifestLines, [System.Text.UTF8Encoding]::new($false))
     Invoke-Checked wsl.exe @('--export', $stagingName, $artifactTemp) 'WSL export'
     if (-not (Test-Path -LiteralPath $artifactTemp -PathType Leaf)) { throw 'WSL export did not produce an artifact' }
     Invoke-Checked wsl.exe @('--unregister', $stagingName) 'staging distro cleanup'
     $stagingImported = $false
     Move-Item -LiteralPath $artifactTemp -Destination $artifact
     $artifactTemp = $null
+    Move-Item -LiteralPath $manifestTemp -Destination "$artifact.txt"
+    $manifestTemp = $null
     Write-Host "Build succeeded: $artifact"
 }
 catch {
@@ -207,5 +224,6 @@ catch {
 finally {
     if ($stagingImported -and -not $preserveStaging) { Remove-StagingDistro }
     if ($artifactTemp -and (Test-Path -LiteralPath $artifactTemp)) { Remove-Item -LiteralPath $artifactTemp -Force -ErrorAction SilentlyContinue }
+    if ($manifestTemp -and (Test-Path -LiteralPath $manifestTemp)) { Remove-Item -LiteralPath $manifestTemp -Force -ErrorAction SilentlyContinue }
     if ($workingDirectory -and (Test-Path -LiteralPath $workingDirectory)) { Remove-Item -LiteralPath $workingDirectory -Recurse -Force -ErrorAction SilentlyContinue }
 }

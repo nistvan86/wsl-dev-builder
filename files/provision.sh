@@ -217,6 +217,9 @@ done
 [[ "$(passwd -S ubuntu | awk '{print $2}')" == L* ]] || die 'ubuntu password is not locked'
 [[ "$(stat -c '%u:%g:%a' /etc/wsl.conf)" == '0:0:644' ]] || die '/etc/wsl.conf has incorrect metadata'
 [[ -z "$(dpkg --audit)" ]] || die 'dpkg reports unfinished transactions'
+manifest_directory=/usr/local/lib/wsl-dev-builder
+printf '%s\n' "${RESOLVED_PACKAGES[@]}" > "$manifest_directory/image-modules.txt"
+dpkg-query -W -f='${binary:Package}\n' | LC_ALL=C sort > "$manifest_directory/installed-system-packages.txt"
 if is_wsl_environment; then grep -Fq WSL_DISTRO_NAME /home/ubuntu/.bashrc || die 'WSL prompt missing'; ! grep -Fq __wsl_builder /home/ubuntu/.bashrc || die 'staging name leaked'; fi
 
 if [[ "$0" == '/opt/wsl-dev-builder/provision.sh' && "$CONFIG_DIR" == '/opt/wsl-dev-builder/files' ]]; then

@@ -33,7 +33,7 @@ Use parameters to replace or extend settings for one build:
 .\build.ps1 -AddPackages my-module -AddBaseUtilities cmake -DistributionDirectory D:\WSL\images
 ```
 
-Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. The result is `ubuntu-dev-YYYY-MM-DD.wsl`. Existing artifacts are never overwritten; subsequent builds use `-2`, `-3`, and so on. The builder reserves `__wsl_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
+Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. Each `ubuntu-dev-YYYY-MM-DD.wsl` artifact has an adjacent `.wsl.txt` manifest listing its Ubuntu base image, resolved modules, and installed system packages. Existing artifacts and manifests are never overwritten; subsequent builds use `-2`, `-3`, and so on. The builder reserves `__wsl_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
 
 ## Install and onboard
 
