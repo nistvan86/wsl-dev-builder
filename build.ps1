@@ -126,8 +126,17 @@ fi
 '@
     Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $mountInteropValidation) 'mount and Windows interop isolation validation'
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
-    $forbiddenGroups = 'sudo wheel docker lxd disk libvirt kvm'
-    Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', "set -eu; groups=\`$(id -nG); for group in $forbiddenGroups; do case \" \`$groups \" in *\" \`$group \"*) echo \"forbidden group present: \`$group\" >&2; exit 1;; esac; done; ! command -v sudo") 'runtime privilege validation'
+    $runtimePrivilegeValidation = @'
+set -eu
+groups=$(id -nG)
+for group in sudo wheel docker lxd disk libvirt kvm; do
+    case " $groups " in
+        *" $group "*) echo "forbidden group present: $group" >&2; exit 1 ;;
+    esac
+done
+! command -v sudo
+'@
+    Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $runtimePrivilegeValidation) 'runtime privilege validation'
 
 
     Write-Host '[6/6] Exporting final artifact'
