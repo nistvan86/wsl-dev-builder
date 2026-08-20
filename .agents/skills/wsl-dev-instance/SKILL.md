@@ -25,14 +25,10 @@ Use existing modules and base utilities whenever possible:
 | GitHub CLI/login | `github` module |
 | Node.js/npm | `nodejs` module |
 | Codex CLI | `codex` module; it automatically includes `nodejs` and Bubblewrap |
-| C/C++ compiler | default `build-essential`, `g++` |
-| CMake | `-AddBaseUtilities cmake` |
-| Ninja | `-AddBaseUtilities ninja-build` |
-| Python | `-AddBaseUtilities python3,python3-venv,pipx` when the project documentation requires it |
-| Rust | `-AddBaseUtilities rustc,cargo` when required |
-| Go | `-AddBaseUtilities golang-go` when required |
 
 For a reusable project-specific capability not represented by an existing module, add a `packages/<name>/` module before building. Declare all APT dependencies in `system-packages.txt`, dependencies on other modules in `dependencies.txt`, tools in `required-tools.txt`, and use optional `provision.sh`/`onboard.sh` contributors only when necessary. Do not hide package dependencies in `build.ps1`.
+
+Don't create separate packages for Ubuntu distro packages which have no special provisioning or onboarding step needs. Those should be just added with `-AddBaseUtilities` to the build.
 
 Use `-Packages` or `-BaseUtilities` to fully replace the configured selection. Use `-AddPackages` or `-AddBaseUtilities` to extend it. Use `-DistributionDirectory`, `-ImageName`, and `-ImageComment` for a specific build target.
 
