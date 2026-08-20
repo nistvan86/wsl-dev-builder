@@ -36,7 +36,7 @@ $manifestTemp = $null
 $artifact = $null
 $manifestPath = $null
 $preserveStaging = $false
-$defaultBaseUtilities = @('build-essential', 'g++', 'git', 'gh', 'make', 'mc', 'wget', 'curl', 'pkg-config')
+$defaultBaseUtilities = @('build-essential', 'g++', 'git', 'gh', 'make', 'mc', 'wget', 'curl', 'pkg-config', 'openssh-client')
 $defaultPackages = @('github', 'nodejs', 'codex')
 $settingsPath = Join-Path $scriptRoot 'build.settings.psd1'
 $packageRoot = Join-Path $scriptRoot 'packages'
@@ -57,6 +57,21 @@ function Merge-UniqueStrings {
 function Write-LinuxList {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string[]]$Items)
     [System.IO.File]::WriteAllLines($Path, $Items, [System.Text.UTF8Encoding]::new($false))
+}
+
+function ConvertTo-LinuxLineEndings {
+    param([Parameter(Mandatory)][string]$Root)
+    $textExtensions = @('.conf', '.sh', '.txt')
+    $textFiles = Get-ChildItem -LiteralPath $Root -File -Recurse | Where-Object {
+        $_.Extension -in $textExtensions -or $_.Name -eq 'onboard-agent-distro'
+    }
+    foreach ($file in $textFiles) {
+        $content = [System.IO.File]::ReadAllText($file.FullName)
+        $normalized = $content.Replace("`r`n", "`n").Replace("`r", "`n")
+        if ($normalized -ne $content) {
+            [System.IO.File]::WriteAllText($file.FullName, $normalized, [System.Text.UTF8Encoding]::new($false))
+        }
+    }
 }
 
 function ConvertTo-PowerShellLiteral {
@@ -121,7 +136,9 @@ try {
     $selectedPackages = Merge-UniqueStrings $selectedPackages (ConvertTo-StringArray $AddPackages 'AddPackages')
     foreach ($systemPackage in $selectedBaseUtilities) { if ($systemPackage -notmatch '^[A-Za-z0-9.+:-]+$') { throw "invalid base utility package: $systemPackage" } }
     if ($ImageName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { throw "invalid image name: $ImageName" }
-    foreach ($package in $selectedPackages) { if ($package -notmatch '^[a-z][a-z0-9-]*$') { throw "invalid package module: $package" } }
+    foreach ($package in $selectedPackages) {
+        if ($package -notmatch '^[a-z][a-z0-9-]*(?::[A-Za-z0-9][A-Za-z0-9._+-]*)?$') { throw "invalid package spec: $package" }
+    }
     $configuredDistributionDirectory = if ($settings.ContainsKey('DistributionDirectory')) { [string]$settings['DistributionDirectory'] } else { './dist' }
     $requestedDistributionDirectory = if ($DistributionDirectory) { $DistributionDirectory } else { $configuredDistributionDirectory }
     # Non-absolute output paths are always project-relative, not caller-relative.
@@ -146,7 +163,8 @@ try {
     }
     if (-not (Test-Path -LiteralPath $packageRoot -PathType Container)) { throw "required package directory is missing: $packageRoot" }
     foreach ($package in $selectedPackages) {
-        if (-not (Test-Path -LiteralPath (Join-Path $packageRoot $package) -PathType Container)) { throw "selected package module is missing: $package" }
+        $packageName = ($package -split ':', 2)[0]
+        if (-not (Test-Path -LiteralPath (Join-Path $packageRoot $packageName) -PathType Container)) { throw "selected package module is missing: $packageName" }
     }
     foreach ($requiredPath in @(
         (Join-Path $scriptRoot 'files/provision.sh'),
@@ -197,6 +215,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/onboard-agent-distro') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/onboard-agent-distro')
     Copy-Item -LiteralPath $wslConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl.conf')
     Copy-Item -LiteralPath $wslDistributionConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl-distribution.conf')
+    ConvertTo-LinuxLineEndings (Join-Path $overlayDirectory 'opt/wsl-dev-builder')
     Invoke-Checked $tarPath @('-rf', $rootfsTar, '-C', $overlayDirectory, 'opt/wsl-dev-builder/provision.sh', 'opt/wsl-dev-builder/base-utilities.txt', 'opt/wsl-dev-builder/selected-packages.txt', 'opt/wsl-dev-builder/packages', 'opt/wsl-dev-builder/files/wsl.conf', 'opt/wsl-dev-builder/files/wsl-distribution.conf', 'opt/wsl-dev-builder/files/isolation-runtime.sh', 'opt/wsl-dev-builder/files/onboard-agent-distro') 'adding provisioning inputs to rootfs archive'
 
     Write-Host '[3/6] Importing rootfs into WSL2'
@@ -217,6 +236,7 @@ try {
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
     Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
     $resolvedModules = Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'cat', '/usr/local/lib/wsl-dev-builder/image-modules.txt') 'image module manifest retrieval'
+    $resolvedPackageSpecs = @($resolvedModules -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
     Write-Host '[6/6] Exporting final artifact'
     Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before export'
@@ -236,7 +256,7 @@ try {
         '& .\build.ps1 `'
         "  -DistributionDirectory $(ConvertTo-PowerShellLiteral $replayDistributionDirectory) ``"
         "  -BaseUtilities $(ConvertTo-PowerShellArrayLiteral $selectedBaseUtilities) ``"
-        "  -Packages $(ConvertTo-PowerShellArrayLiteral $selectedPackages) ``"
+        "  -Packages $(ConvertTo-PowerShellArrayLiteral $resolvedPackageSpecs) ``"
         "  -ImageName $(ConvertTo-PowerShellLiteral $ImageName) ``"
         "  -ImageComment $(ConvertTo-PowerShellLiteral $ImageComment)"
     ) -join "`n"

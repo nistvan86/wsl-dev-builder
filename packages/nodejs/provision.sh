@@ -1,7 +1,23 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-NVM_VERSION='v0.40.6'
+requested_version="${1:-}"
+
+# Keep this list ordered from oldest to newest supported NVM release. When no
+# version is requested, select the last entry automatically.
+supported_versions=(v0.40.6)
+if [[ -z "$requested_version" ]]; then
+  NVM_VERSION="${supported_versions[${#supported_versions[@]}-1]}"
+else
+  case "$requested_version" in
+    0.40.6|v0.40.6) NVM_VERSION='v0.40.6' ;;
+    *) printf '[nodejs] unsupported requested NVM version: %s\n' "$requested_version" >&2; exit 1 ;;
+  esac
+fi
+if [[ -n "${WSL_DEV_BUILDER_RESOLVED_VERSION_FILE:-}" ]]; then
+  printf '%s\n' "$NVM_VERSION" > "$WSL_DEV_BUILDER_RESOLVED_VERSION_FILE"
+fi
+
 runuser -u ubuntu -- env HOME=/home/ubuntu NVM_DIR=/home/ubuntu/.nvm bash -c '
   set -Eeuo pipefail
   mkdir -p "$NVM_DIR"

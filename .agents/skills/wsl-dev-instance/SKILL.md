@@ -26,7 +26,7 @@ Use existing modules and base utilities whenever possible:
 | Node.js/npm | `nodejs` module |
 | Codex CLI | `codex` module; it automatically includes `nodejs` and Bubblewrap |
 
-For a reusable project-specific capability not represented by an existing module, add a `packages/<name>/` module before building. Declare all APT dependencies in `system-packages.txt`, dependencies on other modules in `dependencies.txt`, tools in `required-tools.txt`, and use optional `provision.sh`/`onboard.sh` contributors only when necessary. Do not hide package dependencies in `build.ps1`.
+For a reusable project-specific capability not represented by an existing module, add a `packages/<name>/` module before building. Package selections use `name[:version]`; keep module directories version-neutral. Declare all APT dependencies in `system-packages.txt`, dependencies on other modules in `dependencies.txt`, tools in `required-tools.txt`, and use optional `provision.sh`, `onboard-init.sh`, and `onboard.sh` contributors only when necessary. `provision.sh` receives the selected version as its first argument, or an empty argument when no version was requested; it must choose the newest supported version in that case, fail closed for unsupported explicit versions, and write the concrete selected version to `$WSL_DEV_BUILDER_RESOLVED_VERSION_FILE` when that environment variable is set. Keep release metadata and checksums beside the selection logic. `onboard-init.sh` contributors are sourced before onboarding. Each `onboard.sh` contributor is opt-in and must detect the installed binary version itself when onboarding is version-specific. Do not hide package dependencies or version selection in `build.ps1`.
 
 Don't create separate packages for Ubuntu distro packages which have no special provisioning or onboarding step needs. Those should be just added with `-AddBaseUtilities` to the build.
 
@@ -92,8 +92,14 @@ Do not use `-KeepStagingOnFailure` unless inspecting a build failure. A failed b
 
 The wrapper verifies that the artifact exists, the distro name is unregistered, and the configured storage subdirectory is unused. It reads the optional ignored `install.settings.psd1`; when `InstanceDirectory` is a configured absolute path, it installs to `<InstanceDirectory>\<distro-name>`, otherwise it lets WSL choose its default location. When the user requests a one-off location override, pass it explicitly with `-InstanceDirectory <absolute-path>`.
 
-5. The wrapper starts the distro **interactively** after installation. Do not add `-- command` to this launch. The image’s `[oobe]` configuration automatically runs `onboard-agent-distro` on the first interactive launch, where the user completes GitHub and Codex authentication. If onboarding fails, leave the distro registered; WSL will retry OOBE at the next interactive launch.
+5. Do **not** launch the distro after installation. Always provide the user with the exact interactive command instead:
+
+```powershell
+wsl.exe -d <distro-name>
+```
+
+The image’s `[oobe]` configuration automatically runs `onboard-agent-distro` on the first interactive launch, where the user completes GitHub and Codex authentication. The user should run the command from Windows Terminal or PowerShell. If onboarding fails, leave the distro registered; WSL will retry OOBE at the next interactive launch.
 
 ## 6. Report the result
 
-Report the artifact reused or built, its companion manifest path, the distro name, any selected overrides, and that the interactive launch is performing or has performed onboarding. Never report that onboarding succeeded unless it actually completed.
+Report the artifact reused or built, its companion manifest path, the distro name, any selected overrides, and the exact `wsl.exe -d <distro-name>` command the user should run. State that onboarding will begin when the user launches it. Never launch the distro or report that onboarding succeeded.

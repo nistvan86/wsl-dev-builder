@@ -12,7 +12,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - `files/provision.sh` is the authoritative portable Linux provisioning policy. It resolves selected package modules, installs their declared system dependencies, runs provisioning contributors, and installs their onboarding/validation contributions.
 - `build.settings.psd1` is an optional, ignored user settings file. `build.settings.psd1.example` is the committed template. Keep it restricted to `DistributionDirectory`, `BaseUtilities`, and `Packages` data.
 - `install.ps1` installs a named artifact from `dist/` and launches it interactively for OOBE onboarding. `install.settings.psd1` is its optional, ignored local configuration; its committed template contains only `InstanceDirectory`. The `-InstanceDirectory` parameter overrides that setting for one installation.
-- `packages/<name>/` defines an installable module. It may contain `dependencies.txt`, `system-packages.txt`, `required-tools.txt`, `provision.sh`, and `onboard.sh`. Dependency resolution is depth-first and fails on missing modules or cycles; provision and onboarding hooks run only for the resolved selection.
+- `packages/<name>/` defines an installable module. Package selections use `name[:version]`; the version is optional and module directories remain version-neutral. It may contain `dependencies.txt`, `system-packages.txt`, `required-tools.txt`, `provision.sh`, `onboard-init.sh`, and `onboard.sh`. Dependency resolution is depth-first and fails on missing modules, cycles, or conflicting versions; a selected version is passed as the first argument to `provision.sh`, while an empty argument requests the module's latest supported version. A version-aware `provision.sh` must write the concrete selected version to `$WSL_DEV_BUILDER_RESOLVED_VERSION_FILE` when that environment variable is set, so image metadata and rebuild commands are explicit. `onboard-init.sh` contributors are sourced before opt-in onboarding scripts; `onboard.sh` must detect the installed binary version itself when onboarding has version-specific behavior. Provision and onboarding hooks run only for the resolved selection.
 - `files/` contains all non-PowerShell operational scripts and WSL configuration:
   - `provision.sh`
   - `isolation-runtime.sh`
@@ -27,6 +27,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 
 - Resolve project-relative paths from the script location, never the caller's working directory. In companion replay commands, record project-contained output directories relative to `build.ps1`.
 - Use strict, fail-fast PowerShell and Bash behavior. Check every native command exit status.
+- New package modules must keep version selection in `provision.sh`: accept the optional first version argument, choose the newest supported version when it is empty, fail closed for unsupported explicit versions, and write the concrete selected version to `$WSL_DEV_BUILDER_RESOLVED_VERSION_FILE` when available. Keep checksums and other release metadata beside the selection logic; do not make `build.ps1` aware of package versions.
 - Provisioning and every required validation are fail-closed: a failure must prevent export.
 - Export to a temporary location first; only move a successful export to its final artifact name.
 - Name artifacts `<image-name>.wsl` (default image name: `ubuntu-dev`). `build.ps1 -ImageName` may choose another validated basename. Never overwrite an existing artifact or its `<image>.wsl.txt` companion manifest unless `build.ps1 -Rebuild` is explicitly requested.
@@ -48,7 +49,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 ### Authentication and onboarding
 
 - Reusable `.wsl` artifacts must contain no GitHub or Codex credentials.
-- Authentication happens only inside each installed distro as `ubuntu`, through `/usr/local/bin/onboard-agent-distro`. `/etc/wsl-distribution.conf` invokes it as the first-interactive-launch OOBE command.
+- Authentication happens only inside each installed distro as `ubuntu`, through `/usr/local/bin/onboard-agent-distro`. `/etc/wsl-distribution.conf` invokes it as the first-interactive-launch OOBE command. The launcher sources all `onboard-init.sh` contributions first, then asks the user to opt in to each `onboard.sh` contribution; an absent or empty onboarding directory is successful.
 - GitHub uses HTTPS device/login flow; Codex uses `codex login --device-auth`. An onboarding failure must leave OOBE incomplete so WSL retries it on the next interactive launch.
 - Never inspect, reuse, transfer, or seed Windows GitHub/Codex tokens, environment variables, credential files, or `/mnt/c` content.
 - Do not recreate `bootstrap.ps1`; users select and install an artifact directly with `wsl --install --from-file`.
@@ -81,8 +82,12 @@ The current target is **reduced accidental Windows integration and reduced Linux
 ## PowerShell, WSL, tar, and Bash rules
 
 - Treat PowerShell → `wsl.exe` → Bash as separate argument-parsing boundaries.
+- When invoking PowerShell from Git Bash or another POSIX-style host shell, use forward-slash Windows paths such as `C:/dev/project/build.ps1`; backslash paths may be rewritten before PowerShell receives them.
+- `build.ps1` array parameters such as `-Packages` and `-AddBaseUtilities` are PowerShell `string[]` parameters. Do not pass comma-separated values through `powershell.exe -File`, because the whole comma-separated token can be received as one invalid package name. For reliable companion replay commands, invoke through PowerShell's parser with explicit arrays, for example `powershell.exe -Command \"& 'C:/dev/project/build.ps1' -Packages @('github','codex') -AddBaseUtilities @('clang','lld')\"`.
+- Newly created Linux shell scripts must use LF line endings. Convert them before running tests or committing them; CRLF can make Bash strict-mode options such as `pipefail` fail to parse.
 - Do not send generated scripts, complex tokens, or credentials through shell-constructed command strings. Prefer a short literal command or a file already injected into the Linux filesystem.
 - Add provisioning inputs to the rootfs tar **before** `wsl --import`; modifying the archive afterward does not modify the imported filesystem.
+- `build.ps1` must normalize known injected Linux text files to LF in the staging overlay before archiving, so a CRLF working tree cannot produce broken Linux shebangs. Keep `.gitattributes` LF rules and the pre-test/pre-commit LF requirement as the source-tree safeguards.
 - Use normal `tar.exe` append/rewrite operations. Do not edit tar headers manually.
 - Do not use `/tmp` for durable image handoff files; use `/opt/wsl-dev-builder`. Temporary runtime test directories under `/tmp` are acceptable when cleaned up.
 - Provisioner cleanup may remove only its injected `/opt/wsl-dev-builder` input directory. It must not delete a mounted development checkout when run for debugging.

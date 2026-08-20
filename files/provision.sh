@@ -27,8 +27,14 @@ read_list_file() {
   done < "$file"
 }
 
-validate_package_name() {
-  [[ "$1" =~ ^[a-z][a-z0-9-]*$ ]] || die "invalid package module name: $1"
+parse_package_spec() {
+  local spec="$1"
+  if [[ "$spec" =~ ^([a-z][a-z0-9-]*)(:([A-Za-z0-9][A-Za-z0-9._+-]*))?$ ]]; then
+    PACKAGE_NAME="${BASH_REMATCH[1]}"
+    PACKAGE_VERSION="${BASH_REMATCH[3]:-}"
+  else
+    die "invalid package spec: $spec"
+  fi
 }
 
 mapfile -t BASE_UTILITIES < <(read_list_file "$BASE_UTILITIES_FILE")
@@ -39,8 +45,9 @@ done
 
 # Resolve module dependencies depth-first. A module can supply newline-delimited
 # dependencies.txt, system-packages.txt, and required-tools.txt plus optional
-# provision.sh and onboard.sh contributors.
+# provision.sh and onboard.sh contributors. Package specs use module[:version].
 declare -A PACKAGE_STATE=()
+declare -A PACKAGE_VERSIONS=()
 declare -a RESOLVED_PACKAGES=()
 declare -a MODULE_SYSTEM_PACKAGES=()
 declare -a REQUIRED_TOOLS=()
@@ -65,14 +72,30 @@ append_unique_required_tool() {
 }
 
 resolve_package() {
-  local package="$1" dependency file
-  validate_package_name "$package"
+  local spec="$1" package version dependency file
+  parse_package_spec "$spec"
+  package="$PACKAGE_NAME"
+  version="$PACKAGE_VERSION"
   case "${PACKAGE_STATE[$package]:-}" in
-    done) return ;;
-    visiting) die "package dependency cycle includes: $package" ;;
+    done|visiting)
+      existing_version="${PACKAGE_VERSIONS[$package]:-}"
+      if [[ -n "$version" && -z "$existing_version" && "${PACKAGE_STATE[$package]}" == done ]]; then
+        PACKAGE_VERSIONS["$package"]="$version"
+        for index in "${!RESOLVED_PACKAGES[@]}"; do
+          if [[ "${RESOLVED_PACKAGES[$index]}" == "$package" ]]; then RESOLVED_PACKAGES[$index]="$package:$version"; fi
+        done
+        return
+      fi
+      if [[ -n "$version" && -n "$existing_version" && "$existing_version" != "$version" ]]; then
+        die "conflicting versions requested for package $package: '${existing_version:-latest}' and '${version:-latest}'"
+      fi
+      if [[ "${PACKAGE_STATE[$package]}" == done ]]; then return; fi
+      die "package dependency cycle includes: $spec"
+      ;;
   esac
   [[ -d "$PACKAGES_DIR/$package" ]] || die "unknown package module: $package"
   PACKAGE_STATE["$package"]=visiting
+  PACKAGE_VERSIONS["$package"]="$version"
 
   file="$PACKAGES_DIR/$package/dependencies.txt"
   if [[ -f "$file" ]]; then
@@ -90,7 +113,7 @@ resolve_package() {
   fi
 
   PACKAGE_STATE["$package"]=done
-  RESOLVED_PACKAGES+=("$package")
+  RESOLVED_PACKAGES+=("$spec")
 }
 
 while IFS= read -r package; do resolve_package "$package"; done < <(read_list_file "$SELECTED_PACKAGES_FILE")
@@ -103,7 +126,7 @@ log 'unminimizing Ubuntu'
 set +o pipefail; printf 'y\n' | unminimize; unminimize_status=${PIPESTATUS[1]}; set -o pipefail
 (( unminimize_status == 0 )) || die "unminimize failed with status $unminimize_status"
 
-CORE_SYSTEM_PACKAGES=(locales systemd systemd-sysv dbus ca-certificates apt-utils)
+CORE_SYSTEM_PACKAGES=(locales systemd systemd-sysv libpam-systemd dbus ca-certificates apt-utils)
 BUILD_AUDIT_PACKAGES=(libcap2-bin)
 log 'installing base utilities and module system dependencies'
 apt-get install -y --no-install-recommends "${CORE_SYSTEM_PACKAGES[@]}" "${BUILD_AUDIT_PACKAGES[@]}" "${BASE_UTILITIES[@]}" "${MODULE_SYSTEM_PACKAGES[@]}"
@@ -141,23 +164,44 @@ EOF
   '
 fi
 
-for package in "${RESOLVED_PACKAGES[@]}"; do
+install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder
+for index in "${!RESOLVED_PACKAGES[@]}"; do
+  spec="${RESOLVED_PACKAGES[$index]}"
+  parse_package_spec "$spec"
+  package="$PACKAGE_NAME"
+  version="$PACKAGE_VERSION"
   contributor="$PACKAGES_DIR/$package/provision.sh"
+  resolved_version_file="/usr/local/lib/wsl-dev-builder/.resolved-version-$package"
+  rm -f "$resolved_version_file"
   if [[ -f "$contributor" ]]; then
-    log "running provision contributor: $package"
-    bash "$contributor"
+    log "running provision contributor: $spec"
+    WSL_DEV_BUILDER_RESOLVED_VERSION_FILE="$resolved_version_file" bash "$contributor" "$version"
+    if [[ -s "$resolved_version_file" ]]; then
+      resolved_version=$(tr -d '[:space:]' < "$resolved_version_file")
+      [[ "$resolved_version" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || die "invalid resolved version for package $package: $resolved_version"
+      version="$resolved_version"
+    fi
   fi
+  if [[ -n "$version" ]]; then RESOLVED_PACKAGES[$index]="$package:$version"; fi
 done
 
 install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder/onboard.d
+install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder/onboard-init.d
 : > /usr/local/lib/wsl-dev-builder/required-tools.txt
-for package in "${RESOLVED_PACKAGES[@]}"; do
+for spec in "${RESOLVED_PACKAGES[@]}"; do
+  parse_package_spec "$spec"
+  package="$PACKAGE_NAME"
   contributor="$PACKAGES_DIR/$package/onboard.sh"
   if [[ -f "$contributor" ]]; then
     install -o root -g root -m 0755 "$contributor" "/usr/local/lib/wsl-dev-builder/onboard.d/$package.sh"
   fi
+  initializer="$PACKAGES_DIR/$package/onboard-init.sh"
+  if [[ -f "$initializer" ]]; then
+    install -o root -g root -m 0755 "$initializer" "/usr/local/lib/wsl-dev-builder/onboard-init.d/$package.sh"
+  fi
 done
 for tool in "${REQUIRED_TOOLS[@]}"; do printf '%s\n' "$tool"; done > /usr/local/lib/wsl-dev-builder/required-tools.txt
+rm -f /usr/local/lib/wsl-dev-builder/.resolved-version-*
 
 log 'auditing and stripping SUID/SGID runtime files'
 suid_sgid_files=()

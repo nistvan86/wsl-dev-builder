@@ -1,4 +1,10 @@
 *.sh text eol=lf
+packages/*/*.sh text eol=lf
+packages/*/onboard-init.sh text eol=lf
+files/provision.sh text eol=lf
+files/isolation-runtime.sh text eol=lf
+files/onboard-agent-distro text eol=lf
+packages/bazelisk/provision.sh text eol=lf
 *.conf text eol=lf
 onboard-agent-distro text eol=lf
 *.psd1 text eol=lf

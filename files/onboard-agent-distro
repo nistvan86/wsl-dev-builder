@@ -2,28 +2,47 @@
 set -Eeuo pipefail
 
 fail() { printf '[onboard] ERROR: %s\n' "$*" >&2; exit 1; }
-[[ "$(id -u)" == 1000 && "$(id -un)" == ubuntu ]] || fail 'must run as the default ubuntu user'
+if [[ "$(id -u)" != 1000 ]]; then
+  exec runuser -u ubuntu -- env HOME=/home/ubuntu bash /usr/local/bin/onboard-agent-distro "$@"
+fi
+[[ "$(id -un)" == ubuntu ]] || fail 'must run as the default ubuntu user'
+printf '[onboard] re-run with: /usr/local/bin/onboard-agent-distro\n'
 
-# Onboarding runs directly from WSL, so establish the user-local and nvm paths
-# required by module contributors without relying on an inherited shell profile.
-export PATH="/home/ubuntu/.local/bin:$PATH"
-for node_bin in /home/ubuntu/.nvm/versions/node/*/bin; do
-  if [[ -x "$node_bin/node" ]]; then
-    export PATH="$node_bin:$PATH"
-    break
-  fi
-done
+init_directory=/usr/local/lib/wsl-dev-builder/onboard-init.d
+if [[ -d "$init_directory" ]]; then
+  shopt -s nullglob
+  initializers=("$init_directory"/*.sh)
+  for initializer in "${initializers[@]}"; do
+    # shellcheck source=/dev/null
+    . "$initializer"
+  done
+fi
 
 onboard_directory=/usr/local/lib/wsl-dev-builder/onboard.d
-[[ -d "$onboard_directory" ]] || fail 'onboarding contributions are missing'
+if [[ ! -d "$onboard_directory" ]]; then
+  printf '[onboard] no onboarding scripts are installed\n'
+  exit 0
+fi
 
 shopt -s nullglob
 contributors=("$onboard_directory"/*.sh)
 if (( ${#contributors[@]} == 0 )); then
-  printf '[onboard] no selected packages require onboarding\n'
+  printf '[onboard] no onboarding scripts are installed\n'
 else
   for contributor in "${contributors[@]}"; do
-    bash "$contributor"
+    contributor_name=$(basename "$contributor" .sh)
+    answer=''
+    if [[ -r /dev/tty && -w /dev/tty ]]; then
+      if ! IFS= read -r -p "[onboard] Run $contributor_name onboarding? (y/N) " answer < /dev/tty; then answer=''; fi
+    fi
+    case "$answer" in
+      y|Y|yes|YES|Yes)
+        bash "$contributor"
+        ;;
+      *)
+        printf '[onboard] skipped %s onboarding\n' "$contributor_name"
+        ;;
+    esac
   done
 fi
 
