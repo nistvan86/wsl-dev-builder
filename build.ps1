@@ -137,7 +137,7 @@ done
 ! command -v sudo
 '@
     Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $runtimePrivilegeValidation) 'runtime privilege validation'
-
+    Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
 
     Write-Host '[6/6] Exporting final artifact'
     Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before export'
