@@ -21,7 +21,7 @@ for windows_executable in cmd.exe powershell.exe explorer.exe; do
   ! command -v "$windows_executable" >/dev/null 2>&1 || fail "Windows executable is available: $windows_executable"
 done
 
-mount_test="$HOME/.isolation-mount-test"
+mount_test="/tmp/wsl-dev-builder-mount-test-$$"
 mkdir -p "$mount_test"
 trap 'rmdir "$mount_test" 2>/dev/null || true' EXIT
 if mount -t drvfs C: "$mount_test" 2>/dev/null; then

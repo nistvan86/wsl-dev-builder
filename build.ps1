@@ -133,7 +133,7 @@ test ! -e /mnt/d || ! findmnt -rn /mnt/d
 ! command -v cmd.exe
 ! command -v powershell.exe
 ! command -v explorer.exe
-mount_test="$HOME/.isolation-mount-test"
+mount_test="/tmp/wsl-dev-builder-mount-test-$$"
 mkdir -p "$mount_test"
 trap 'rmdir "$mount_test" 2>/dev/null || true' EXIT
 if mount -t drvfs C: "$mount_test" 2>/dev/null; then
