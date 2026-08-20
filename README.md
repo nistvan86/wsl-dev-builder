@@ -64,4 +64,10 @@ For GitHub, bootstrap always runs GitHub CLI's interactive HTTPS login inside th
 
 Authentication is per developer instance; credentials are never copied into or seeded in `.wsl` artifacts. If authentication fails after WSL installation, bootstrap returns a failure but intentionally leaves the created distro registered so you can fix the login and retry.
 
+## Network policies
+
+The default policy is **Normal Internet**: Codex and GitHub work, but the agent may reach services exposed by the Windows host. Runtime validation reports reachability of the default gateway, host-local SMB/SSH/Docker ports, and Docker TLS without failing on network results.
+
+For a global offline policy, set `networkingMode=none` under `[wsl2]` in `%UserProfile%\\.wslconfig`. This affects every WSL 2 distro and prevents normal cloud-agent operation, so the project never applies it automatically. A host-firewall policy can restrict WSL loopback or outbound traffic, but Hyper-V firewall rules are associated with shared WSL infrastructure rather than reliably scoped to this distro; apply those rules only with explicit opt-in and review their global impact.
+
 The runtime `ubuntu` user has no `sudo` executable and is rejected if it belongs to `sudo`, `wheel`, `docker`, `lxd`, `disk`, `libvirt`, or `kvm`. Root and ubuntu password authentication is locked; trusted Windows maintenance can still use `wsl -d <distro-name> -u root` explicitly.
