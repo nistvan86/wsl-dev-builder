@@ -59,29 +59,19 @@ Keep:
 - `provision.sh` as the Linux provisioning script.
 - `files/wsl.conf` as distro-specific WSL configuration.
 - `files/wsl-distribution.conf`.
-- `bootstrap.ps1` as distro installation/authentication.
-- `tests/bootstrap-selection.ps1`.
+- Direct `wsl.exe --install --from-file` for distro installation.
+- `/usr/local/bin/onboard-agent-distro` for in-distro authentication.
 - Ubuntu 24.04.
 - UID/GID 1000 user named `ubuntu`.
 - Existing Node.js, Codex, GitHub CLI and bubblewrap installation.
 
-The current builder already separates Windows lifecycle handling from Linux provisioning, so preserve this separation.
+The current builder already separates Windows lifecycle handling from Linux provisioning, so preserve this separation. Host users install the artifact directly with `wsl --install --from-file`; the image provides `/usr/local/bin/onboard-agent-distro` for in-distro authentication.
 
-**Implemented status:** Stage 0 preserved that architecture on the `agent-isolation` branch. The lightweight `tests/bootstrap-selection.ps1` test passed. The unchanged baseline build was attempted, but WSL initially blocked import because the stale `__wsl_builder` registration was stuck in `Uninstalling` state; after unregistering it, the build reached provisioning and exposed a CRLF checkout issue, which was fixed with `.gitattributes` enforcing LF for shell scripts.
+**Implemented status:** Stage 0 preserved the Windows builder/Linux provisioning separation on the `agent-isolation` branch. The original lightweight bootstrap-selection test passed before the bootstrap wrapper was removed. The unchanged baseline build was attempted, but WSL initially blocked import because the stale `__wsl_builder` registration was stuck in `Uninstalling` state; later builds exposed and fixed repository line-ending and runtime validation issues.
 
 ## 0.3 Run the existing lightweight test
 
-```powershell
-.\tests\bootstrap-selection.ps1
-```
-
-Expected result:
-
-```text
-bootstrap-selection: passed
-```
-
-The existing test verifies artifact filename selection logic.
+The former bootstrap-selection test was removed with `bootstrap.ps1`. Artifact selection is now an explicit user choice when invoking `wsl --install --from-file`.
 
 ## 0.4 Build one unchanged baseline image
 
@@ -402,13 +392,13 @@ Complexity: medium.
 
 Security improvement: high for prompt-injected agents.
 
-The current `bootstrap.ps1` reads an authenticated Windows `gh.exe` token and sends it into the distro through stdin when available. That means the agent may inherit the same GitHub credential scopes as the trusted Windows development environment.
+The former Windows bootstrap wrapper reused an authenticated Windows `gh.exe` token and sent it into the distro through stdin. The current design removes that wrapper and performs onboarding inside the installed distro.
 
-**Implemented status:** Windows `gh.exe` discovery and token reuse were removed; GitHub login always occurs interactively inside the distro. `tests/isolation-runtime.sh` validates identity, privilege, mounts, interop, daemon sockets, protected paths, and developer tools. The script is packaged into the image and run by both `build.ps1` and `bootstrap.ps1` before export or authentication; failures return non-zero and prevent authentication.
+**Implemented status:** `bootstrap.ps1` was removed. GitHub login and Codex device authentication are provided by `/usr/local/bin/onboard-agent-distro`, which runs inside the registered distro and never reads Windows credentials. `tests/isolation-runtime.sh` validates identity, mounts, interop, daemon sockets, protected paths, and developer tools during `build.ps1` before export; it is not run after `.wsl` deployment.
 
 ## 3.1 Remove Windows GitHub token reuse
 
-Simplify `Invoke-GitHubAuthentication`.
+The former PowerShell authentication helper was removed with `bootstrap.ps1`. Authentication is now implemented by the distro-owned `onboard-agent-distro` command.
 
 Delete:
 
@@ -432,13 +422,13 @@ Windows credential files
 
 ## 3.2 Keep Codex device authentication
 
-The existing bootstrap already runs:
+`onboard-agent-distro` runs the existing model inside the distro:
 
 ```bash
 codex login --device-auth
 ```
 
-inside the distro. Keep that model.
+Authentication remains interactive and associated with the `ubuntu` account.
 
 ## 3.3 Create `tests/isolation-runtime.sh`
 
@@ -500,19 +490,9 @@ run tests/isolation-runtime.sh as ubuntu
 
 The image must not be exported if the test fails.
 
-## 3.5 Run it again from `bootstrap.ps1`
+## 3.5 Post-install isolation audit
 
-Immediately after installation and before authentication:
-
-```text
-install distro
-terminate distro
-start distro
-run isolation validation
-only then perform GitHub/Codex authentication
-```
-
-This checks the actual installed distro instead of trusting build-time state.
+**Deferred by design:** The isolation audit is build-time-only. The installed `.wsl` image is not re-audited by the onboarding command. Users can run the commands in the final regression section manually when they need post-install verification.
 
 ## 3.6 Ensure validation failure is fail-closed
 
@@ -521,7 +501,7 @@ If isolation validation fails:
 - Print the failed invariant.
 - Do not authenticate GitHub.
 - Do not authenticate Codex.
-- Leave the distro registered for manual inspection, matching the repository's current bootstrap failure behavior.
+- Leave the distro registered for manual inspection, matching WSL's direct installation behavior.
 - Return non-zero.
 
 ## Stage 3 commit
@@ -786,7 +766,7 @@ Complexity: medium.
 
 Security improvement: situational.
 
-Important: do not automatically modify global WSL settings from `build.ps1` or `bootstrap.ps1`.
+Important: do not automatically modify global WSL settings from `build.ps1` or onboarding.
 
 **Implemented status:** `host-isolation-audit.ps1` is read-only and reports WSL/Windows versions, `.wslconfig`, WSLg, networking, Hyper-V firewall visibility, and Docker Desktop indicators. Runtime validation reports `/mnt/wslg`, rejects Docker availability, and checks daemon sockets; no host-wide setting is changed automatically.
 
@@ -815,7 +795,7 @@ Do not change anything automatically.
 
 Docker Desktop allows WSL integration to be enabled for individual distributions and exposes Docker functionality inside those distributions.
 
-After bootstrap, fail isolation validation if the agent can use:
+After onboarding, ensure isolation validation has already passed at build time and fail the manual deployment check if the agent can use:
 
 ```bash
 docker
@@ -1026,7 +1006,7 @@ Keep network shared initially because Codex and GitHub need Internet access.
 
 A separate no-network launcher can additionally unshare networking for offline tasks.
 
-## 8.4 Make bootstrap print the intended invocation
+## 8.4 Make onboarding print the intended invocation
 
 After successful installation:
 
@@ -1077,14 +1057,14 @@ Do not claim the WSL branch provides that guarantee.
 Before merging any chosen stopping stage:
 
 ```powershell
-.\tests\bootstrap-selection.ps1
 .\build.ps1
 ```
 
 Install a temporary distro:
 
 ```powershell
-.\bootstrap.ps1 -Name __wsl_agent_test -Location <temporary-location>
+wsl --install --from-file .\ubuntu-dev-YYYY-MM-DD.wsl --name __wsl_agent_test --location <temporary-location>
+wsl -d __wsl_agent_test -- onboard-agent-distro
 ```
 
 As the default user verify:

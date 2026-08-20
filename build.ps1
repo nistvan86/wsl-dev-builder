@@ -49,7 +49,8 @@ try {
         (Join-Path $scriptRoot 'provision.sh'),
         (Join-Path $scriptRoot 'files/wsl.conf'),
         (Join-Path $scriptRoot 'files/wsl-distribution.conf'),
-        (Join-Path $scriptRoot 'tests/isolation-runtime.sh')
+        (Join-Path $scriptRoot 'tests/isolation-runtime.sh'),
+        (Join-Path $scriptRoot 'onboard-agent-distro')
     )) {
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) { throw "required project file is missing: $requiredPath" }
     }
@@ -86,9 +87,10 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $scriptRoot 'provision.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/provision.sh')
     Copy-Item -LiteralPath (Join-Path $scriptRoot 'tests/isolation-runtime.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/isolation-runtime.sh')
+    Copy-Item -LiteralPath (Join-Path $scriptRoot 'onboard-agent-distro') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/onboard-agent-distro')
     Copy-Item -LiteralPath $wslConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl.conf')
     Copy-Item -LiteralPath $wslDistributionConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl-distribution.conf')
-    Invoke-Checked $tarPath @('-rf', $rootfsTar, '-C', $overlayDirectory, 'opt/wsl-dev-builder/provision.sh', 'opt/wsl-dev-builder/files/wsl.conf', 'opt/wsl-dev-builder/files/wsl-distribution.conf', 'opt/wsl-dev-builder/files/isolation-runtime.sh') 'adding provisioning inputs to rootfs archive'
+    Invoke-Checked $tarPath @('-rf', $rootfsTar, '-C', $overlayDirectory, 'opt/wsl-dev-builder/provision.sh', 'opt/wsl-dev-builder/files/wsl.conf', 'opt/wsl-dev-builder/files/wsl-distribution.conf', 'opt/wsl-dev-builder/files/isolation-runtime.sh', 'opt/wsl-dev-builder/files/onboard-agent-distro') 'adding provisioning inputs to rootfs archive'
 
     Write-Host '[3/6] Importing rootfs into WSL2'
     Invoke-Checked wsl.exe @('--import', $stagingName, $storagePath, $rootfsTar, '--version', '2') 'WSL import'
@@ -106,7 +108,7 @@ try {
     $defaultUid = Invoke-WslOutput @('-d', $stagingName, '--', 'id', '-u') 'default-UID validation'
     if ($defaultUid -ne '1000') { throw "default UID validation failed (got '$defaultUid')" }
     $mountInteropValidation = @'
-set -eu
+set -eux
 [ "$(id -u)" = 1000 ]
 [ "$(id -un)" = ubuntu ]
 ! findmnt -rn -t drvfs | grep -q .

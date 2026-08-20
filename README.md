@@ -27,7 +27,7 @@ The successful output is `ubuntu-dev-YYYY-MM-DD.wsl`. Existing artifacts are nev
 
 This isolation branch disables automatic Windows filesystem mounts, `/etc/fstab` processing, Windows executable interop, and Windows PATH injection. GPU integration remains at its default for now; disabling it is intentionally deferred. The image also removes SUID/SGID bits from runtime files and rejects high-risk Linux file capabilities during provisioning. A normal image has no DrvFs mounted at `/mnt/c` or `/mnt/d` and cannot launch Windows executables; empty mountpoint directories may still exist. These settings do not prevent Linux root from manually mounting DrvFs; later hardening stages remove runtime privilege escalation and test that manual mounts fail for `ubuntu`.
 
-This image enables systemd; the builder validates systemd as PID 1 and developer tooling is validated during build and bootstrap. The reserved temporary WSL distro name is `__wsl_builder`. The builder may unregister exactly that name at startup or during cleanup, so do not use it for another purpose.
+This image enables systemd; the builder validates systemd as PID 1 and developer tooling is validated during build and onboarding. The reserved temporary WSL distro name is `__wsl_builder`. The builder may unregister exactly that name at startup or during cleanup, so do not use it for another purpose.
 
 Run `./host-isolation-audit.ps1` from PowerShell for a read-only report of WSL version/status, global `.wslconfig`, WSLg, networking mode, Hyper-V firewall visibility, and Docker Desktop indicators. The audit never changes host-wide settings. Docker Desktop WSL Integration must remain disabled for this distro; WSLg is reported as an optional host-wide integration surface.
 
@@ -38,32 +38,33 @@ wsl --install --from-file .\ubuntu-dev-YYYY-MM-DD.wsl --name __wsl_poc_test
 wsl -d __wsl_poc_test -- id
 wsl -d __wsl_poc_test -- bash -lc 'command -v sudo && exit 1 || exit 0'
 wsl -d __wsl_poc_test -- systemctl is-system-running
+wsl -d __wsl_poc_test -- onboard-agent-distro
 
 wsl --unregister __wsl_poc_test
 ```
 
-`provision.sh` owns package selection, Ubuntu configuration, user setup, and Linux-side validation. The editable base utility list is near the top of that file. The PowerShell layer intentionally only handles Windows/WSL lifecycle and artifact handling.
+`provision.sh` owns package selection, Ubuntu configuration, user setup, and Linux-side build validation. The editable base utility list is near the top of that file. The builder runs `tests/isolation-runtime.sh` before exporting the artifact; the audit is not repeated after deployment.
 
-The `ubuntu` Bash prompt evaluates `WSL_DISTRO_NAME` at runtime, so it shows the actual registered distro name. The reusable image contains no GitHub or Codex credentials. Both the builder and bootstrap run `tests/isolation-runtime.sh` before any artifact export or authentication; a failure stops the operation and bootstrap leaves the distro registered for inspection.
+The `ubuntu` Bash prompt evaluates `WSL_DISTRO_NAME` at runtime, so it shows the actual registered distro name. The reusable image contains no GitHub or Codex credentials.
 
 ## Create a developer distro
 
-Use `bootstrap.ps1` to install the newest image as a named distro at a chosen storage location:
+Install a built image directly with the WSL command line:
 
 ```powershell
-.\bootstrap.ps1 -Name dev-foo -Location D:\WSL\dev-foo
+wsl --install --from-file .\\ubuntu-dev-YYYY-MM-DD.wsl --name dev-foo --location D:\\WSL\\dev-foo
+wsl -d dev-foo -- id
 ```
 
-Image selection compares the date and same-day build number in the filename, not file timestamps. Override it explicitly when needed:
+Image selection is intentionally a host-side choice; select the desired date-stamped `.wsl` file directly. WSL owns registration, naming, storage location, termination, and removal.
+
+After installation, run the distro-owned onboarding command as the default `ubuntu` user:
 
 ```powershell
-.\bootstrap.ps1 -Name dev-foo -Location D:\WSL\dev-foo `
-    -ImagePath .\ubuntu-dev-2026-08-07.wsl
+wsl -d dev-foo -- onboard-agent-distro
 ```
 
-For GitHub, bootstrap always runs GitHub CLI's interactive HTTPS login inside the new distro, then configures and validates Git operations. It never reads a Windows `gh` token or Windows credential store. Codex authentication always runs interactively inside the distro with `codex login --device-auth`, followed by `codex login status`.
-
-Authentication is per developer instance; credentials are never copied into or seeded in `.wsl` artifacts. If authentication fails after WSL installation, bootstrap returns a failure but intentionally leaves the created distro registered so you can fix the login and retry.
+`onboard-agent-distro` performs interactive GitHub HTTPS login and Codex device authentication entirely inside the distro. It never reads Windows `gh` tokens, Windows environment variables, Windows credential files, or `/mnt/c`. Authentication is per developer instance; credentials are never copied into or seeded in `.wsl` artifacts. If onboarding fails, the distro remains registered so you can retry manually.
 
 ## Network policies
 

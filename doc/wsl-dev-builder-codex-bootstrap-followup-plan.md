@@ -1,5 +1,7 @@
 # Follow-up implementation plan: Codex-ready WSL image and developer bootstrap
 
+> Historical note: the `bootstrap.ps1` design in this document was superseded by direct `wsl --install --from-file` usage and the distro-owned `onboard-agent-distro` command. Do not recreate the PowerShell bootstrap wrapper from this document.
+
 ## Goal
 
 Extend the existing `wsl-dev-builder` project at:
