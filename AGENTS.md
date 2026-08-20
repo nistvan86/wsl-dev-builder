@@ -11,6 +11,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - `build.ps1` is the thin Windows orchestration layer. It owns prerequisite checks, WSL lifecycle operations, archive staging, export, artifact naming, and cleanup.
 - `files/provision.sh` is the authoritative portable Linux provisioning policy. It resolves selected package modules, installs their declared system dependencies, runs provisioning contributors, and installs their onboarding/validation contributions.
 - `build.settings.psd1` is an optional, ignored user settings file. `build.settings.psd1.example` is the committed template. Keep it restricted to `DistributionDirectory`, `BaseUtilities`, and `Packages` data.
+- `install.ps1` installs a named artifact from `dist/` and launches it interactively for OOBE onboarding. `install.settings.psd1` is its optional, ignored local configuration; its committed template contains only `InstanceDirectory`. The `-InstanceDirectory` parameter overrides that setting for one installation.
 - `packages/<name>/` defines an installable module. It may contain `dependencies.txt`, `system-packages.txt`, `required-tools.txt`, `provision.sh`, and `onboard.sh`. Dependency resolution is depth-first and fails on missing modules or cycles; provision and onboarding hooks run only for the resolved selection.
 - `files/` contains all non-PowerShell operational scripts and WSL configuration:
   - `provision.sh`

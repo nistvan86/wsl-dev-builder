@@ -86,19 +86,15 @@ Do not use `-KeepStagingOnFailure` unless inspecting a build failure. A failed b
 1. Determine the artifact path selected or built.
 2. Choose a short distro name. Honor an explicit user-provided name. Otherwise derive a unique name such as `dev-web`, `dev-retroos`, or `dev-node`.
 3. Check registered distributions with `wsl --list --quiet`. Never overwrite, terminate, or unregister an unrelated distro. If the desired name already exists, choose a deterministic suffix such as `-2`.
-4. Install from the selected artifact. Include `--location <path>` only when the user supplied or approved that location:
+4. Install and launch through the repository wrapper. Pass only the artifact filename because the wrapper resolves it from `dist/`:
 
 ```powershell
-wsl --install --from-file <artifact.wsl> --name <distro-name>
+.\install.ps1 -ImageName <artifact.wsl> -DistroName <distro-name>
 ```
 
-5. Start the distro **interactively** after installation:
+The wrapper verifies that the artifact exists, the distro name is unregistered, and the configured storage subdirectory is unused. It reads the optional ignored `install.settings.psd1`; when `InstanceDirectory` is a configured absolute path, it installs to `<InstanceDirectory>\<distro-name>`, otherwise it lets WSL choose its default location. When the user requests a one-off location override, pass it explicitly with `-InstanceDirectory <absolute-path>`.
 
-```powershell
-wsl -d <distro-name>
-```
-
-Do not add `-- command` to this launch. The image’s `[oobe]` configuration automatically runs `onboard-agent-distro` on the first interactive launch, where the user completes GitHub and Codex authentication. If onboarding fails, leave the distro registered; WSL will retry OOBE at the next interactive launch.
+5. The wrapper starts the distro **interactively** after installation. Do not add `-- command` to this launch. The image’s `[oobe]` configuration automatically runs `onboard-agent-distro` on the first interactive launch, where the user completes GitHub and Codex authentication. If onboarding fails, leave the distro registered; WSL will retry OOBE at the next interactive launch.
 
 ## 6. Report the result
 

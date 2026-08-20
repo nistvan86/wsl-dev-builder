@@ -1,8 +1,9 @@
 # Local image-builder dependency (download/place beside build.ps1; do not commit)
 crane.exe
 
-# Local builder settings and generated WSL distribution artifacts
+# Local builder and instance settings plus generated WSL distribution artifacts
 build.settings.psd1
+install.settings.psd1
 dist/
 *.wsl
 *.wsl.partial

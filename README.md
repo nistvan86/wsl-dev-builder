@@ -42,12 +42,21 @@ Package modules live in `packages/<name>/`; Codex automatically selects its Node
 
 ## Install and onboard
 
-Install the artifact you choose directly with WSL:
+Copy the optional instance-location template when you want newly installed distro storage under a specific absolute Windows path:
 
 ```powershell
-wsl --install --from-file .\dist\ubuntu-dev-YYYY-MM-DD.wsl --name dev-foo --location D:\WSL\dev-foo
-wsl -d dev-foo -- id
-wsl -d dev-foo
+Copy-Item .\install.settings.psd1.example .\install.settings.psd1
+```
+
+Set `InstanceDirectory` in that ignored file, such as `D:\WSL\instances`. Leave it empty or omit the file to let WSL choose its default location.
+
+Install an artifact by filename from `dist/`. The wrapper validates the image, ensures the distro name is unused, creates `<InstanceDirectory>\<DistroName>` when configured, and launches the distro interactively:
+
+```powershell
+.\install.ps1 -ImageName ubuntu-dev-YYYY-MM-DD.wsl -DistroName dev-foo
+
+# Override the configured/default location for one instance.
+.\install.ps1 -ImageName ubuntu-dev-YYYY-MM-DD.wsl -DistroName dev-retroos -InstanceDirectory D:\WSL\instances
 ```
 
 The first interactive launch automatically runs the distro-owned onboarding flow, which performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows. If onboarding is interrupted or fails, WSL keeps OOBE incomplete and retries it on the next interactive launch.

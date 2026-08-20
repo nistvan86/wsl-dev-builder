@@ -1,0 +1,5 @@
+@{
+    # Root directory for new WSL distro storage. Use an absolute Windows path.
+    # Leave empty to let WSL choose its default storage location.
+    InstanceDirectory = ''
+}
