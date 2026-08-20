@@ -69,7 +69,7 @@ probe_tcp() {
     printf '[isolation] network probe: %s unavailable\n' "$label"
   fi
 }
-default_gateway=$(ip route 2>/dev/null | awk '$1 == "default" { print $3; exit }')
+default_gateway=$(ip route 2>/dev/null | awk '$1 == "default" { print $3; exit }' || true)
 if [[ -n "$default_gateway" ]]; then probe_tcp 'default gateway DNS' "$default_gateway" 53; else printf '[isolation] network probe: default gateway unavailable\n'; fi
 probe_tcp 'host localhost SMB' 127.0.0.1 445
 probe_tcp 'host localhost SSH' 127.0.0.1 22
