@@ -96,6 +96,7 @@ if ($MyInvocation.InvocationName -ne '.') {
         Invoke-GitHubAuthentication -DistroName $Name
         Write-Host 'Authenticating Codex with device auth'
         Invoke-CodexAuthentication -DistroName $Name
+        Write-Host 'Run the AI agent through: isolated-agent'
         Write-Host "Bootstrap succeeded: $Name"
     } catch {
         Write-Error "Bootstrap failed: $($_.Exception.Message). The created distro, if any, was left registered."
