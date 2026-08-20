@@ -53,10 +53,10 @@ Set `InstanceDirectory` in that ignored file, such as `D:\WSL\instances`. Leave 
 Install an artifact by filename from `dist/`. The wrapper validates the image, ensures the distro name is unused, creates `<InstanceDirectory>\<DistroName>` when configured, and launches the distro interactively:
 
 ```powershell
-.\install.ps1 -ImageName ubuntu-dev-YYYY-MM-DD.wsl -DistroName dev-foo
+.\install.ps1 -ImageName ubuntu-dev.wsl -DistroName dev-foo
 
 # Override the configured/default location for one instance.
-.\install.ps1 -ImageName ubuntu-dev-YYYY-MM-DD.wsl -DistroName dev-retroos -InstanceDirectory D:\WSL\instances
+.\install.ps1 -ImageName ubuntu-dev-retroos.wsl -DistroName dev-retroos -InstanceDirectory D:\WSL\instances
 ```
 
 The first interactive launch automatically runs the distro-owned onboarding flow, which performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows. If onboarding is interrupted or fails, WSL keeps OOBE incomplete and retries it on the next interactive launch.

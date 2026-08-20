@@ -29,8 +29,8 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - Use strict, fail-fast PowerShell and Bash behavior. Check every native command exit status.
 - Provisioning and every required validation are fail-closed: a failure must prevent export.
 - Export to a temporary location first; only move a successful export to its final artifact name.
-- Name artifacts `<image-name>-YYYY-MM-DD.wsl` (default image name: `ubuntu-dev`). `build.ps1 -ImageName` may choose another validated basename. Never overwrite an existing artifact or its `<image>.wsl.txt` companion manifest unless `build.ps1 -Rebuild` is explicitly requested.
-- Publish `<image>.wsl.txt` beside each artifact. It must record the OCI base image, resolved modules, selected base utilities, the optional `build.ps1 -ImageComment`, and a fully resolved `build.ps1` replay command independent of local settings.
+- Name artifacts `<image-name>.wsl` (default image name: `ubuntu-dev`). `build.ps1 -ImageName` may choose another validated basename. Never overwrite an existing artifact or its `<image>.wsl.txt` companion manifest unless `build.ps1 -Rebuild` is explicitly requested.
+- Publish `<image>.wsl.txt` beside each artifact. It must record the OCI base image, build date, resolved modules, selected base utilities, the optional `build.ps1 -ImageComment`, and a fully resolved `build.ps1` replay command independent of local settings.
 - On ordinary failure, clean temporary files and `__wsl_builder` without masking the primary error. `build.ps1 -KeepStagingOnFailure` is the supported debugging path when the staging filesystem must be inspected.
 - Preserve the pre-existing `ubuntu` account. It must remain UID/GID `1000`; do not rename or recreate it.
 

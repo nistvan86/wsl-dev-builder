@@ -115,7 +115,7 @@ try {
     $distributionPath = if ([System.IO.Path]::IsPathRooted($requestedDistributionDirectory)) { $requestedDistributionDirectory } else { Join-Path $scriptRoot $requestedDistributionDirectory }
     $distributionPath = [System.IO.Path]::GetFullPath($distributionPath)
     $date = Get-Date -Format 'yyyy-MM-dd'
-    $artifact = Join-Path $distributionPath "$ImageName-$date.wsl"
+    $artifact = Join-Path $distributionPath "$ImageName.wsl"
     $manifestPath = "$artifact.txt"
     if ((Test-Path -LiteralPath $artifact) -or (Test-Path -LiteralPath $manifestPath)) {
         if (-not $Rebuild) { throw "artifact conflict: $artifact or $manifestPath already exists. Use -Rebuild to replace this image." }
@@ -213,6 +213,7 @@ try {
         'WSL Dev Builder image manifest'
         ''
         "Ubuntu base image: $imageReference"
+        "Build date: $date"
     )
     if (-not [string]::IsNullOrWhiteSpace($ImageComment)) {
         $manifestLines += @('', 'Image comment:') + @($ImageComment -split "`r?`n")
