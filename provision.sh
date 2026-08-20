@@ -108,6 +108,8 @@ capability_roots=(/bin /sbin /usr /lib /lib64 /opt)
 capability_audit=$(getcap -r "${capability_roots[@]}" 2>/dev/null || true)
 printf '%s\n' "$capability_audit"
 if printf '%s\n' "$capability_audit" | grep -Eiq 'cap_(sys_admin|dac_override|dac_read_search|sys_ptrace|sys_module|sys_rawio|setuid|setgid)'; then die 'high-risk Linux file capability detected'; fi
+log 'removing build-only capability audit tooling'
+apt-get purge -y --auto-remove libcap2-bin
 log 'installing WSL configuration'
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl.conf" /etc/wsl.conf
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl-distribution.conf" /etc/wsl-distribution.conf
@@ -134,8 +136,8 @@ for unit in systemd-resolved.service systemd-networkd.service NetworkManager.ser
 log 'cleaning apt metadata'; rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 log 'validating the provisioned image'
 source /etc/os-release; [[ "${ID:-}" == ubuntu && "${VERSION_ID:-}" == 24.04 ]] || die 'image is not Ubuntu 24.04'
-for package in systemd systemd-sysv dbus libcap2-bin "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
-command -v getcap >/dev/null || die 'getcap is unavailable'
+for package in systemd systemd-sysv dbus "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
+! command -v getcap || die 'build-only getcap tooling remains installed'
 command -v systemd >/dev/null; command -v systemctl >/dev/null
 ! command -v sudo || die 'sudo must not be installed'
 for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
