@@ -54,27 +54,14 @@ function Invoke-WslIdentityValidation {
 
 function Invoke-GitHubAuthentication {
     param([Parameter(Mandatory)][string]$DistroName)
-    $hostGh = Get-Command gh.exe -ErrorAction SilentlyContinue
-    $hostGhPath = if ($hostGh) { $hostGh.Source } else { Join-Path ${env:ProgramFiles} 'GitHub CLI\gh.exe' }
-    if (-not (Test-Path -LiteralPath $hostGhPath -PathType Leaf)) { $hostGhPath = $null }
-    $usableHostGh = $false
-    if ($hostGhPath) {
-        $hostToken = ((& $hostGhPath auth token --hostname github.com 2>$null | Out-String).Trim())
-        $usableHostGh = ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($hostToken))
-    }
-    if ($usableHostGh) {
-        try {
-            # The token is passed only through stdin; it is never an argument or file.
-            $hostToken | & wsl.exe -d $DistroName -u ubuntu -- gh auth login --hostname github.com --git-protocol https --with-token
-            if ($LASTEXITCODE -ne 0) { throw "GitHub token import failed with exit code $LASTEXITCODE" }
-        } finally {
-            Remove-Variable hostToken -ErrorAction SilentlyContinue
-        }
-    } else {
-        Invoke-WslChecked @('-d', $DistroName, '-u', 'ubuntu', '--', 'gh', 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https') 'interactive GitHub authentication'
-    }
+    Invoke-WslChecked @('-d', $DistroName, '-u', 'ubuntu', '--', 'gh', 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https') 'interactive GitHub authentication'
     Invoke-WslChecked @('-d', $DistroName, '-u', 'ubuntu', '--', 'gh', 'auth', 'setup-git', '--hostname', 'github.com') 'GitHub git helper setup'
     Invoke-WslChecked @('-d', $DistroName, '-u', 'ubuntu', '--', 'gh', 'auth', 'status', '--hostname', 'github.com') 'GitHub authentication validation'
+}
+
+function Invoke-IsolationValidation {
+    param([Parameter(Mandatory)][string]$DistroName)
+    Invoke-WslChecked @('-d', $DistroName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
 }
 
 function Invoke-CodexAuthentication {
@@ -103,6 +90,8 @@ if ($MyInvocation.InvocationName -ne '.') {
         Write-Host "Installing $Name from $image"
         Invoke-Checked wsl.exe @('--install', '--from-file', $image, '--name', $Name, '--location', $locationFull) 'WSL developer distro installation'
         Invoke-WslIdentityValidation -DistroName $Name
+        Invoke-WslChecked @('--terminate', $Name) 'developer distro termination before isolation validation'
+        Invoke-IsolationValidation -DistroName $Name
         Write-Host 'Authenticating GitHub (credentials remain inside this distro)'
         Invoke-GitHubAuthentication -DistroName $Name
         Write-Host 'Authenticating Codex with device auth'

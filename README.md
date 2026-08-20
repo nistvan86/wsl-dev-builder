@@ -41,7 +41,7 @@ wsl --unregister __wsl_poc_test
 
 `provision.sh` owns package selection, Ubuntu configuration, user setup, and Linux-side validation. The editable base utility list is near the top of that file. The PowerShell layer intentionally only handles Windows/WSL lifecycle and artifact handling.
 
-The `ubuntu` Bash prompt evaluates `WSL_DISTRO_NAME` at runtime, so it shows the actual registered distro name. The reusable image contains no GitHub or Codex credentials.
+The `ubuntu` Bash prompt evaluates `WSL_DISTRO_NAME` at runtime, so it shows the actual registered distro name. The reusable image contains no GitHub or Codex credentials. Both the builder and bootstrap run `tests/isolation-runtime.sh` before any artifact export or authentication; a failure stops the operation and bootstrap leaves the distro registered for inspection.
 
 ## Create a developer distro
 
@@ -58,7 +58,7 @@ Image selection compares the date and same-day build number in the filename, not
     -ImagePath .\ubuntu-dev-2026-08-07.wsl
 ```
 
-For GitHub, bootstrap reuses a usable authenticated Windows `gh` token through stdin when available. Otherwise it runs GitHub CLI's interactive HTTPS login inside the new distro, then configures and validates Git operations. Codex authentication always runs interactively inside the distro with `codex login --device-auth`, followed by `codex login status`.
+For GitHub, bootstrap always runs GitHub CLI's interactive HTTPS login inside the new distro, then configures and validates Git operations. It never reads a Windows `gh` token or Windows credential store. Codex authentication always runs interactively inside the distro with `codex login --device-auth`, followed by `codex login status`.
 
 Authentication is per developer instance; credentials are never copied into or seeded in `.wsl` artifacts. If authentication fails after WSL installation, bootstrap returns a failure but intentionally leaves the created distro registered so you can fix the login and retry.
 
