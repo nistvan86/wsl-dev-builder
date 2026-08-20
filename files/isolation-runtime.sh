@@ -17,7 +17,6 @@ done
 ! findmnt -rn -t drvfs | grep -q . || fail 'a DrvFs filesystem is mounted'
 if [[ -e /mnt/c ]] && findmnt -rn /mnt/c >/dev/null; then fail '/mnt/c is mounted'; fi
 if [[ -e /mnt/d ]] && findmnt -rn /mnt/d >/dev/null; then fail '/mnt/d is mounted'; fi
-test ! -e /proc/sys/fs/binfmt_misc/WSLInterop || fail 'WSLInterop registration exists'
 for windows_executable in cmd.exe powershell.exe explorer.exe; do
   ! command -v "$windows_executable" >/dev/null 2>&1 || fail "Windows executable is available: $windows_executable"
 done

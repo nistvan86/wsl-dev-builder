@@ -133,7 +133,6 @@ test ! -e /mnt/d || ! findmnt -rn /mnt/d
 ! command -v cmd.exe
 ! command -v powershell.exe
 ! command -v explorer.exe
-test ! -e /proc/sys/fs/binfmt_misc/WSLInterop
 mount_test="$HOME/.isolation-mount-test"
 mkdir -p "$mount_test"
 trap 'rmdir "$mount_test" 2>/dev/null || true' EXIT

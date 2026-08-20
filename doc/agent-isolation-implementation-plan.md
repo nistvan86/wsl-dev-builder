@@ -101,9 +101,9 @@ Security improvement: high against accidental host filesystem damage.
 
 This is the first useful cut point.
 
-**Implemented status:** `files/wsl.conf` disables automounting, fstab processing, Windows interop, and Windows PATH injection. `files/provision.sh` validates the exact settings. `build.ps1` checks the restarted default user, DrvFs mounts, that `/mnt/c` and `/mnt/d` are not mounted (empty mountpoint directories are tolerated), Windows executables, WSLInterop, and manual C: mounting. README guidance documents the resulting boundary and its root-user limitation.
+**Implemented status:** `files/wsl.conf` disables automounting, fstab processing, Windows interop, and Windows PATH injection. `files/provision.sh` validates the exact settings. `build.ps1` checks the restarted default user, DrvFs mounts, that `/mnt/c` and `/mnt/d` are not mounted (empty mountpoint directories are tolerated), Windows executables, and manual C: mounting. `files/isolation-runtime.sh` repeats the runtime checks for the non-root user. WSLInterop is reported as a known host-managed limitation rather than treated as a build invariant. README guidance documents the resulting boundary and its root-user limitation.
 
-WSL supports disabling automatic DrvFs mounts and Windows executable interop on a per-distro basis. `automount.enabled=false` does not disable DrvFs itself, so the non-root requirement in Stage 2 remains necessary.
+WSL supports requesting disabled automatic DrvFs mounts and Windows executable interop on a per-distro basis. `automount.enabled=false` does not disable DrvFs itself, so the non-root requirement in Stage 2 remains necessary. WSL may still expose `/proc/sys/fs/binfmt_misc/WSLInterop`; Microsoft WSL behavior does not provide a reliable hard per-distro guarantee that a Windows PE executable cannot be launched from the Linux filesystem. This implementation therefore targets reduced accidental integration, not a complete Windows execution boundary.
 
 ## 1.1 Modify `files/wsl.conf`
 
@@ -184,13 +184,7 @@ test ! -e /mnt/d
 ! command -v explorer.exe
 ```
 
-Also test the WSL interop registration if present on the installed WSL version:
-
-```bash
-test ! -e /proc/sys/fs/binfmt_misc/WSLInterop
-```
-
-Do not make the test depend only on `$PATH`.
+Do not make the Windows executable test depend only on `$PATH`; retain the configuration validation and the no-DrvFs checks above. Do not fail the build based on `/proc/sys/fs/binfmt_misc/WSLInterop`: its presence is a known WSL host-integration limitation and is not reliably controlled per distro. It may be reported during diagnostics, but it is not a required isolation invariant.
 
 ## 1.4 Test manual DrvFs mounting as `ubuntu`
 
@@ -394,7 +388,7 @@ Security improvement: high for prompt-injected agents.
 
 The former Windows bootstrap wrapper reused an authenticated Windows `gh.exe` token and sent it into the distro through stdin. The current design removes that wrapper and performs onboarding inside the installed distro.
 
-**Implemented status:** `bootstrap.ps1` was removed. GitHub login and Codex device authentication are provided by `/usr/local/bin/onboard-agent-distro`, which runs inside the registered distro and never reads Windows credentials. `files/isolation-runtime.sh` validates identity, mounts, interop, daemon sockets, protected paths, and developer tools during `build.ps1` before export; it is not run after `.wsl` deployment.
+**Implemented status:** `bootstrap.ps1` was removed. GitHub login and Codex device authentication are provided by `/usr/local/bin/onboard-agent-distro`, which runs inside the registered distro and never reads Windows credentials. `files/isolation-runtime.sh` validates identity, mounts, Windows executable lookup, daemon sockets, protected paths, and developer tools during `build.ps1` before export; it is not run after `.wsl` deployment. It intentionally does not require WSLInterop to be absent because that is a known host-managed WSL limitation.
 
 ## 3.1 Remove Windows GitHub token reuse
 
@@ -452,9 +446,8 @@ sudo executable is absent
 forbidden groups are absent
 no drvfs filesystem is mounted
 /mnt/c is absent
-/mnt/d is absent
-WSLInterop is absent
-Windows executables are unavailable
+/mnt/d is not mounted
+Windows executables are unavailable through normal command lookup
 manual drvfs mount as ubuntu fails
 Docker socket is not accessible
 Podman socket is not accessible
@@ -1111,8 +1104,8 @@ no privileged groups
 no DrvFs mounts
 no /mnt/c
 manual C: mount fails
-no WSLInterop registration
-no Windows executables
+WSLInterop is documented as a residual host-managed limitation
+no Windows executables through normal command lookup
 no accessible Docker/Podman/containerd daemon
 no writable privileged configuration/program files
 developer tooling still functions
