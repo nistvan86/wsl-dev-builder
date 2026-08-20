@@ -7,7 +7,7 @@ Builds a reusable Ubuntu 24.04 `.wsl` image for an isolated developer/agent envi
 - Windows with current WSL 2 and PowerShell.
 - `crane.exe` beside `build.ps1`. Download the Windows binary from the [go-containerregistry releases](https://github.com/google/go-containerregistry/releases).
 - `tar.exe` (normally included with Windows; a local `tar.exe` beside `build.ps1` is also accepted).
-- Network access for the base image, Ubuntu packages, nvm, and Codex.
+- Network access to download dependencies.
 
 ## Configure and build
 
@@ -38,7 +38,7 @@ Retro game development environment with the retroos toolchain.
 '@
 ```
 
-Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. Use `-ImageName` to replace the default `ubuntu-dev` artifact-name prefix. Each image has an adjacent `.wsl.txt` manifest listing its Ubuntu base image, resolved modules, selected base utilities, and an optional `-ImageComment`. Existing artifacts and manifests are never overwritten; subsequent builds use `-2`, `-3`, and so on. The builder reserves `__wsl_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
+Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. Use `-ImageName` to replace the default `ubuntu-dev` artifact-name prefix. Each image has an adjacent `.wsl.txt` manifest listing its Ubuntu base image, resolved modules, selected base utilities, an optional `-ImageComment`, and a fully resolved `build.ps1` replay command that does not depend on local settings. Existing artifacts and manifests are never overwritten; subsequent builds use `-2`, `-3`, and so on. The builder reserves `__wsl_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
 
 ## Install and onboard
 

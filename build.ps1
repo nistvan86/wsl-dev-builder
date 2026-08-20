@@ -56,6 +56,16 @@ function Write-LinuxList {
     [System.IO.File]::WriteAllLines($Path, $Items, [System.Text.UTF8Encoding]::new($false))
 }
 
+function ConvertTo-PowerShellLiteral {
+    param([Parameter(Mandatory)][string]$Value)
+    "'" + $Value.Replace("'", "''") + "'"
+}
+
+function ConvertTo-PowerShellArrayLiteral {
+    param([Parameter(Mandatory)][string[]]$Values)
+    '@(' + (($Values | ForEach-Object { ConvertTo-PowerShellLiteral $_ }) -join ', ') + ')'
+}
+
 function Invoke-Checked {
     param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][string[]]$ArgumentList, [string]$Phase = 'external command')
     & $FilePath @ArgumentList
@@ -205,7 +215,15 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($ImageComment)) {
         $manifestLines += @('', 'Image comment:') + @($ImageComment -split "`r?`n")
     }
-    $manifestLines += @('', 'Installed modules:') + @($resolvedModules -split "`n") + @('', 'Base utilities:') + $selectedBaseUtilities
+    $rebuildCommand = @(
+        '& .\build.ps1 `'
+        "  -DistributionDirectory $(ConvertTo-PowerShellLiteral $distributionPath) ``"
+        "  -BaseUtilities $(ConvertTo-PowerShellArrayLiteral $selectedBaseUtilities) ``"
+        "  -Packages $(ConvertTo-PowerShellArrayLiteral $selectedPackages) ``"
+        "  -ImageName $(ConvertTo-PowerShellLiteral $ImageName) ``"
+        "  -ImageComment $(ConvertTo-PowerShellLiteral $ImageComment)"
+    ) -join "`n"
+    $manifestLines += @('', 'Installed modules:') + @($resolvedModules -split "`n") + @('', 'Base utilities:') + $selectedBaseUtilities + @('', 'Rebuild command:', $rebuildCommand)
     [System.IO.File]::WriteAllLines($manifestTemp, $manifestLines, [System.Text.UTF8Encoding]::new($false))
     Invoke-Checked wsl.exe @('--export', $stagingName, $artifactTemp) 'WSL export'
     if (-not (Test-Path -LiteralPath $artifactTemp -PathType Leaf)) { throw 'WSL export did not produce an artifact' }
