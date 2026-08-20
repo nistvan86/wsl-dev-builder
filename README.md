@@ -31,10 +31,5 @@ wsl -d dev-foo -- onboard-agent-distro
 
 The image includes compiler/build tooling, Git and GitHub CLI, Node.js LTS through nvm, Codex CLI, `bubblewrap`, `make`, and `pkg-config`. It uses `ubuntu` (UID 1000), enables systemd, removes runtime `sudo`, disables automatic Windows-drive mounts and Windows PATH injection, and runs build-time privilege/isolation checks.
 
-For a read-only report of host-wide WSL integration and networking exposure, run:
-
-```powershell
-.\files\host-isolation-audit.ps1
-```
 
 This configuration reduces accidental Windows integration but is not a hard host-security boundary: WSLInterop is host-managed, and trusted maintenance can explicitly run `wsl -d dev-foo -u root`.

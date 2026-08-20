@@ -14,7 +14,6 @@ The current target is **reduced accidental Windows integration and reduced Linux
   - `provision.sh`
   - `isolation-runtime.sh`
   - `onboard-agent-distro`
-  - `host-isolation-audit.ps1`
   - `wsl.conf`
   - `wsl-distribution.conf`
 - The staging distro is exactly `__wsl_builder`. It is reserved for this project. Cleanup may terminate or unregister only that exact name; never use partial or wildcard matching.
@@ -72,7 +71,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - WSL-only controls are not a hard boundary against a successful Linux-root compromise. Use a separate VM if that guarantee is required.
 - `unminimize`, systemd, and default GPU integration intentionally remain enabled.
 - `bubblewrap` remains available as a tool, but do not add an automatic Bubblewrap launcher or process-level agent sandbox unless explicitly requested.
-- Do not change global `.wslconfig`, WSLg, networking, or Hyper-V firewall policy automatically. `files/host-isolation-audit.ps1` is read-only. Any host-wide hardening requires explicit user opt-in.
+- Do not change global `.wslconfig`, WSLg, networking, or Hyper-V firewall policy automatically. Any host-wide hardening requires explicit user opt-in.
 - Docker Desktop WSL integration must remain disabled for distros built from this image.
 
 ## PowerShell, WSL, tar, and Bash rules
