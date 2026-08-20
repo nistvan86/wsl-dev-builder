@@ -948,6 +948,8 @@ Security improvement: defense in depth.
 
 The image already installs `bubblewrap`.
 
+**Current implementation note:** Stage 8 is intentionally deferred and is not part of the current image. The WSL user, filesystem, host-integration, and runtime validation stages are the current stopping point; bubblewrap is not used to wrap Zed or another remote agent automatically.
+
 Use it as an additional containment layer rather than relying only on the Linux user account.
 
 ## 8.1 Create an agent launcher

@@ -88,49 +88,6 @@ EOF
 
 runuser -u ubuntu -- env HOME=/home/ubuntu NVM_DIR=/home/ubuntu/.nvm bash -c 'set -Eeuo pipefail; export PATH="$HOME/.local/bin:$PATH"; . "$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; nvm --version; node --version; npm --version; command -v codex; codex --version' >/dev/null || die 'ubuntu developer tooling validation failed'
 
-log 'installing isolated-agent bubblewrap launcher'
-install -d -o root -g root -m 0755 /usr/local/bin /usr/local/lib/wsl-dev-builder
-install -d -o ubuntu -g ubuntu -m 0755 /home/ubuntu/work /home/ubuntu/.codex /home/ubuntu/.cache
-cat > /usr/local/bin/isolated-agent <<'EOF'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-if [[ "${1:-}" == '--help' ]]; then
-  printf 'Usage: isolated-agent [agent-command [argument...]]\n'
-  printf 'Runs the command, or codex by default, inside a bubblewrap sandbox.\n'
-  exit 0
-fi
-command=("$@")
-if (( ${#command[@]} == 0 )); then command=(codex); fi
-exec bwrap \
-  --die-with-parent \
-  --new-session \
-  --unshare-pid \
-  --unshare-uts \
-  --unshare-ipc \
-  --unshare-user-try \
-  --ro-bind /usr /usr \
-  --ro-bind /bin /bin \
-  --ro-bind /lib /lib \
-  --ro-bind /lib64 /lib64 \
-  --ro-bind /etc /etc \
-  --ro-bind /usr/local /usr/local \
-  --ro-bind /home/ubuntu /home/ubuntu \
-  --bind /home/ubuntu/work /home/ubuntu/work \
-  --bind /home/ubuntu/.codex /home/ubuntu/.codex \
-  --bind /home/ubuntu/.cache /home/ubuntu/.cache \
-  --proc /proc \
-  --dev /dev \
-  --tmpfs /run \
-  --tmpfs /tmp \
-  --chdir /home/ubuntu/work \
-  --setenv HOME /home/ubuntu \
-  --setenv PATH /home/ubuntu/.local/bin:/home/ubuntu/.nvm/versions/node/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  -- "${command[@]}"
-EOF
-chmod 0755 /usr/local/bin/isolated-agent
-chown root:root /usr/local/bin/isolated-agent
-
 log 'auditing and stripping SUID/SGID runtime files'
 find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print
 find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -exec chmod u-s,g-s {} +
@@ -144,8 +101,6 @@ install -o root -g root -m 0644 "$CONFIG_DIR/wsl.conf" /etc/wsl.conf
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl-distribution.conf" /etc/wsl-distribution.conf
 if [[ -f "$CONFIG_DIR/isolation-runtime.sh" ]]; then
   install -o root -g root -m 0755 "$CONFIG_DIR/isolation-runtime.sh" /usr/local/lib/wsl-dev-builder/isolation-runtime.sh
-  runuser -u ubuntu -- isolated-agent /usr/local/lib/wsl-dev-builder/isolation-runtime.sh || die 'bubblewrap isolation validation failed'
-  runuser -u ubuntu -- isolated-agent bash -lc 'test ! -e /root && test ! -e /opt' || die 'bubblewrap filesystem visibility validation failed'
 fi
 validate_isolation_config() {
   local section=''
