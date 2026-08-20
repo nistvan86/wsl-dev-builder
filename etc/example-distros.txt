@@ -2,7 +2,7 @@
 
 & .\build.ps1 `
   -DistributionDirectory '.\dist' `
-  -BaseUtilities @('build-essential', 'g++', 'git', 'gh', 'make', 'mc', 'wget', 'curl', 'pkg-config', 'openssh-client', 'clang', 'lld', 'binutils', 'nasm', 'e2fsprogs', 'python3', 'vim-common', 'unzip', 'zip', 'xz-utils', 'qemu-system-x86', 'fuse', 'xxd', 'ovmf', 'grub-common', 'grub-pc-bin', 'grub-efi-amd64-bin', 'mtools', 'dosfstools', 'qemu-system-gui') `
+  -BaseUtilities @('build-essential', 'g++', 'git', 'gh', 'make', 'mc', 'wget', 'curl', 'pkg-config', 'openssh-client', 'clang', 'lld', 'binutils', 'nasm', 'e2fsprogs', 'python3', 'vim-common', 'unzip', 'zip', 'xz-utils', 'qemu-system-x86', 'fuse', 'xxd', 'ovmf', 'grub-common', 'grub-pc-bin', 'grub-efi-amd64-bin', 'mtools', 'dosfstools', 'qemu-system-gui', 'cmake', 'xorriso') `
   -Packages @('github', 'nodejs:v0.40.6', 'codex', 'bazelisk:v1.29.0', '86box:v6.0') `
   -ImageName 'ubuntu-dev-retroos' `
-  -ImageComment 'RetroOS development environment: C/C++ and Clang toolchains, NASM/ext4/Python/archive utilities, QEMU, OVMF/GRUB/FAT image tooling, pinned Bazelisk v1.29.0, GitHub CLI, Codex, and 86Box with matching ROMs.'
+  -ImageComment 'RetroOS development environment: C/C++ and Clang toolchains, CMake, NASM/ext4/Python/archive utilities, xorriso, QEMU, OVMF/GRUB/FAT image tooling, pinned Bazelisk v1.29.0, GitHub CLI, Codex, and 86Box with matching ROMs.'
