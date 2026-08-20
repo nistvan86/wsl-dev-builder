@@ -53,4 +53,10 @@ for tool in codex gh node npm bwrap; do
   command -v "$tool" >/dev/null 2>&1 || fail "required tool is missing: $tool"
 done
 
+if [[ -e /mnt/wslg ]]; then
+  printf '[isolation] report: /mnt/wslg exists (WSLg host integration is present)\n'
+else
+  printf '[isolation] report: /mnt/wslg is absent\n'
+fi
+! command -v docker >/dev/null 2>&1 || fail 'docker executable is available'
 printf '[isolation] passed\n'

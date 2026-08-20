@@ -29,6 +29,8 @@ This isolation branch disables automatic Windows filesystem mounts, `/etc/fstab`
 
 This image does not enable systemd; WSL starts the expected non-systemd environment directly and developer tooling is validated during build and bootstrap. The reserved temporary WSL distro name is `__wsl_builder`. The builder may unregister exactly that name at startup or during cleanup, so do not use it for another purpose.
 
+Run `./host-isolation-audit.ps1` from PowerShell for a read-only report of WSL version/status, global `.wslconfig`, WSLg, networking mode, Hyper-V firewall visibility, and Docker Desktop indicators. The audit never changes host-wide settings. Docker Desktop WSL Integration must remain disabled for this distro; WSLg is reported as an optional host-wide integration surface.
+
 ## Install and test
 
 ```powershell
