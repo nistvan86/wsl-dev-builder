@@ -27,7 +27,7 @@ The successful output is `ubuntu-dev-YYYY-MM-DD.wsl`. Existing artifacts are nev
 
 This isolation branch disables automatic Windows filesystem mounts, `/etc/fstab` processing, Windows executable interop, Windows PATH injection, and per-distro GPU integration. It also removes SUID/SGID bits from runtime files and rejects high-risk Linux file capabilities during provisioning. A normal image therefore has no `/mnt/c` or `/mnt/d` and cannot launch Windows executables. These settings do not prevent Linux root from manually mounting DrvFs; later hardening stages remove runtime privilege escalation and test that manual mounts fail for `ubuntu`.
 
-The reserved temporary WSL distro name is `__wsl_builder`. The builder may unregister exactly that name at startup or during cleanup, so do not use it for another purpose.
+This image does not enable systemd; WSL starts the expected non-systemd environment directly and developer tooling is validated during build and bootstrap. The reserved temporary WSL distro name is `__wsl_builder`. The builder may unregister exactly that name at startup or during cleanup, so do not use it for another purpose.
 
 ## Install and test
 
@@ -35,7 +35,7 @@ The reserved temporary WSL distro name is `__wsl_builder`. The builder may unreg
 wsl --install --from-file .\ubuntu-dev-YYYY-MM-DD.wsl --name __wsl_poc_test
 wsl -d __wsl_poc_test -- id
 wsl -d __wsl_poc_test -- bash -lc 'command -v sudo && exit 1 || exit 0'
-wsl -d __wsl_poc_test -- systemctl is-system-running
+
 wsl --unregister __wsl_poc_test
 ```
 

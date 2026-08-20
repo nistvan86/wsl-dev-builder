@@ -128,7 +128,7 @@ fi
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
     $forbiddenGroups = 'sudo wheel docker lxd disk libvirt kvm'
     Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', "set -eu; groups=\`$(id -nG); for group in $forbiddenGroups; do case \" \`$groups \" in *\" \`$group \"*) echo \"forbidden group present: \`$group\" >&2; exit 1;; esac; done; ! command -v sudo") 'runtime privilege validation'
-    Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
+
 
     Write-Host '[6/6] Exporting final artifact'
     Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before export'

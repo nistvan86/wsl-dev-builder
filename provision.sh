@@ -14,7 +14,7 @@ export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 log 'updating package indexes'; apt-get update
 log 'upgrading the base image'; apt-get -y upgrade
 log 'installing required packages'
-apt-get install -y --no-install-recommends locales systemd systemd-sysv dbus libcap2-bin ca-certificates apt-utils "${BASE_UTILITIES[@]}"
+apt-get install -y --no-install-recommends locales libcap2-bin ca-certificates apt-utils "${BASE_UTILITIES[@]}"
 log 'configuring locale'
 if [[ -f /etc/locale.gen ]]; then sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; locale-gen en_US.UTF-8; fi
 update-locale LANG=en_US.UTF-8
@@ -113,14 +113,13 @@ validate_isolation_config() {
 }
 validate_isolation_config
 
-for unit in systemd-resolved.service systemd-networkd.service NetworkManager.service systemd-tmpfiles-setup.service systemd-tmpfiles-clean.service systemd-tmpfiles-clean.timer systemd-tmpfiles-setup-dev-early.service systemd-tmpfiles-setup-dev.service tmp.mount; do ln -sfn /dev/null "/etc/systemd/system/$unit"; done
+
 log 'cleaning apt metadata'; rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 log 'validating the provisioned image'
 source /etc/os-release; [[ "${ID:-}" == ubuntu && "${VERSION_ID:-}" == 24.04 ]] || die 'image is not Ubuntu 24.04'
 for package in dbus libcap2-bin "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
 command -v getcap >/dev/null || die 'getcap is unavailable'
 ! command -v sudo || die 'sudo must not be installed'
-command -v systemd >/dev/null; command -v systemctl >/dev/null
 for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
   if id -nG ubuntu | tr ' ' '\n' | grep -Fxq "$forbidden_group"; then die "ubuntu is a member of forbidden group: $forbidden_group"; fi
 done
