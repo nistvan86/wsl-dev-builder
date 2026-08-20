@@ -4,7 +4,8 @@ param(
     [string[]]$AddPackages,
     [string[]]$BaseUtilities,
     [string[]]$AddBaseUtilities,
-    [string]$DistributionDirectory
+    [string]$DistributionDirectory,
+    [string]$ImageName = 'ubuntu-dev'
 )
 
 Set-StrictMode -Version Latest
@@ -93,6 +94,7 @@ try {
     $selectedBaseUtilities = Merge-UniqueStrings $selectedBaseUtilities (ConvertTo-StringArray $AddBaseUtilities 'AddBaseUtilities')
     $selectedPackages = Merge-UniqueStrings $selectedPackages (ConvertTo-StringArray $AddPackages 'AddPackages')
     foreach ($systemPackage in $selectedBaseUtilities) { if ($systemPackage -notmatch '^[A-Za-z0-9.+:-]+$') { throw "invalid base utility package: $systemPackage" } }
+    if ($ImageName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { throw "invalid image name: $ImageName" }
     foreach ($package in $selectedPackages) { if ($package -notmatch '^[a-z][a-z0-9-]*$') { throw "invalid package module: $package" } }
     $configuredDistributionDirectory = if ($settings.ContainsKey('DistributionDirectory')) { [string]$settings['DistributionDirectory'] } else { './dist' }
     $requestedDistributionDirectory = if ($DistributionDirectory) { $DistributionDirectory } else { $configuredDistributionDirectory }
@@ -181,7 +183,6 @@ try {
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
     Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
     $resolvedModules = Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'cat', '/usr/local/lib/wsl-dev-builder/image-modules.txt') 'image module manifest retrieval'
-    $installedSystemPackages = Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'cat', '/usr/local/lib/wsl-dev-builder/installed-system-packages.txt') 'installed package manifest retrieval'
 
     Write-Host '[6/6] Exporting final artifact'
     Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before export'
@@ -190,7 +191,7 @@ try {
     $index = 1
     do {
         $suffix = if ($index -eq 1) { '' } else { "-$index" }
-        $artifact = Join-Path $distributionPath "ubuntu-dev-$date$suffix.wsl"
+        $artifact = Join-Path $distributionPath "$ImageName-$date$suffix.wsl"
         $index++
     } while ((Test-Path -LiteralPath $artifact) -or (Test-Path -LiteralPath "$artifact.txt"))
     $artifactTemp = Join-Path $workingDirectory 'artifact.wsl.partial'
@@ -203,8 +204,8 @@ try {
         'Installed modules:'
     ) + @($resolvedModules -split "`n") + @(
         ''
-        'Installed system packages:'
-    ) + @($installedSystemPackages -split "`n")
+        'Base utilities:'
+    ) + $selectedBaseUtilities
     [System.IO.File]::WriteAllLines($manifestTemp, $manifestLines, [System.Text.UTF8Encoding]::new($false))
     Invoke-Checked wsl.exe @('--export', $stagingName, $artifactTemp) 'WSL export'
     if (-not (Test-Path -LiteralPath $artifactTemp -PathType Leaf)) { throw 'WSL export did not produce an artifact' }
