@@ -9,8 +9,18 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $stagingName = '__wsl_builder'
 $imageReference = 'ubuntu:24.04'
 $cranePath = Join-Path $scriptRoot 'crane.exe'
-$tarPath = (Join-Path $env:SystemRoot 'System32\tar.exe')
-if (-not (Test-Path -LiteralPath $tarPath -PathType Leaf)) { $tarPath = (Get-Command tar.exe -ErrorAction SilentlyContinue).Source }
+$tarPath = $null
+$systemTarPath = if ($env:SystemRoot) { Join-Path $env:SystemRoot 'System32\tar.exe' } else { $null }
+if ($systemTarPath -and (Test-Path -LiteralPath $systemTarPath -PathType Leaf)) {
+    $tarPath = $systemTarPath
+} else {
+    $tarCommand = Get-Command tar.exe -ErrorAction SilentlyContinue
+    if ($tarCommand) { $tarPath = $tarCommand.Source }
+}
+if (-not $tarPath) {
+    $localTarPath = Join-Path $scriptRoot 'tar.exe'
+    if (Test-Path -LiteralPath $localTarPath -PathType Leaf) { $tarPath = $localTarPath }
+}
 $workingDirectory = $null
 $stagingImported = $false
 $artifactTemp = $null
@@ -42,9 +52,15 @@ function Remove-StagingDistro {
 }
 
 try {
-    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe was not found' }
-    if (-not (Test-Path -LiteralPath $cranePath -PathType Leaf)) { throw "crane.exe was not found beside build.ps1: $cranePath" }
-    if ([string]::IsNullOrWhiteSpace($tarPath)) { throw 'tar.exe was not found; it is required to add provisioning inputs to the disposable rootfs archive' }
+    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
+        throw 'wsl.exe was not found. Enable Windows Subsystem for Linux and Virtual Machine Platform in Windows Features, reboot, and run "wsl --install" from an elevated PowerShell prompt.'
+    }
+    if (-not (Test-Path -LiteralPath $cranePath -PathType Leaf)) {
+        throw "crane.exe was not found beside build.ps1. Download the Windows binary from https://github.com/google/go-containerregistry/releases, rename it to crane.exe, and place it here: $cranePath"
+    }
+    if ([string]::IsNullOrWhiteSpace($tarPath)) {
+        throw "tar.exe was not found. It is normally included with Windows; place a compatible tar.exe beside build.ps1 if it is missing: $(Join-Path $scriptRoot 'tar.exe')"
+    }
     foreach ($requiredPath in @(
         (Join-Path $scriptRoot 'files/provision.sh'),
         (Join-Path $scriptRoot 'files/wsl.conf'),
