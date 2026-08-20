@@ -216,6 +216,9 @@ done
 [[ "$(passwd -S root | awk '{print $2}')" == L* ]] || die 'root password is not locked'
 [[ "$(passwd -S ubuntu | awk '{print $2}')" == L* ]] || die 'ubuntu password is not locked'
 [[ "$(stat -c '%u:%g:%a' /etc/wsl.conf)" == '0:0:644' ]] || die '/etc/wsl.conf has incorrect metadata'
+[[ "$(stat -c '%u:%g:%a' /etc/wsl-distribution.conf)" == '0:0:644' ]] || die '/etc/wsl-distribution.conf has incorrect metadata'
+grep -Fxq '[oobe]' /etc/wsl-distribution.conf || die 'WSL OOBE section is missing'
+grep -Fxq 'command=/usr/local/bin/onboard-agent-distro' /etc/wsl-distribution.conf || die 'WSL onboarding OOBE command is missing'
 [[ -z "$(dpkg --audit)" ]] || die 'dpkg reports unfinished transactions'
 manifest_directory=/usr/local/lib/wsl-dev-builder
 printf '%s\n' "${RESOLVED_PACKAGES[@]}" > "$manifest_directory/image-modules.txt"

@@ -42,10 +42,10 @@ Install the artifact you choose directly with WSL:
 ```powershell
 wsl --install --from-file .\dist\ubuntu-dev-YYYY-MM-DD.wsl --name dev-foo --location D:\WSL\dev-foo
 wsl -d dev-foo -- id
-wsl -d dev-foo -- onboard-agent-distro
+wsl -d dev-foo
 ```
 
-`onboard-agent-distro` performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows.
+The first interactive launch automatically runs the distro-owned onboarding flow, which performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows. If onboarding is interrupted or fails, WSL keeps OOBE incomplete and retries it on the next interactive launch.
 
 Selected modules contribute their own tooling and onboarding steps. The default selection provides GitHub CLI, Node.js LTS through nvm, and Codex CLI. The image uses `ubuntu` (UID 1000), enables systemd, removes runtime `sudo`, disables automatic Windows-drive mounts and Windows PATH injection, and runs build-time privilege/isolation checks.
 

@@ -47,8 +47,8 @@ The current target is **reduced accidental Windows integration and reduced Linux
 ### Authentication and onboarding
 
 - Reusable `.wsl` artifacts must contain no GitHub or Codex credentials.
-- Authentication happens only inside each installed distro as `ubuntu`, through `/usr/local/bin/onboard-agent-distro`.
-- GitHub uses HTTPS device/login flow; Codex uses `codex login --device-auth`.
+- Authentication happens only inside each installed distro as `ubuntu`, through `/usr/local/bin/onboard-agent-distro`. `/etc/wsl-distribution.conf` invokes it as the first-interactive-launch OOBE command.
+- GitHub uses HTTPS device/login flow; Codex uses `codex login --device-auth`. An onboarding failure must leave OOBE incomplete so WSL retries it on the next interactive launch.
 - Never inspect, reuse, transfer, or seed Windows GitHub/Codex tokens, environment variables, credential files, or `/mnt/c` content.
 - Do not recreate `bootstrap.ps1`; users select and install an artifact directly with `wsl --install --from-file`.
 
