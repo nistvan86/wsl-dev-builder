@@ -124,6 +124,7 @@ if mount -t drvfs C: "$mount_test" 2>/dev/null; then
     exit 1
 fi
 '@
+    $mountInteropValidation = $mountInteropValidation.Replace("`r`n", "`n")
     Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $mountInteropValidation) 'mount and Windows interop isolation validation'
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
     $runtimePrivilegeValidation = @'
@@ -136,6 +137,7 @@ for group in sudo wheel docker lxd disk libvirt kvm; do
 done
 ! command -v sudo
 '@
+    $runtimePrivilegeValidation = $runtimePrivilegeValidation.Replace("`r`n", "`n")
     Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $runtimePrivilegeValidation) 'runtime privilege validation'
     Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
 
