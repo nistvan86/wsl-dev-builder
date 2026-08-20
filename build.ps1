@@ -46,11 +46,11 @@ try {
     if (-not (Test-Path -LiteralPath $cranePath -PathType Leaf)) { throw "crane.exe was not found beside build.ps1: $cranePath" }
     if ([string]::IsNullOrWhiteSpace($tarPath)) { throw 'tar.exe was not found; it is required to add provisioning inputs to the disposable rootfs archive' }
     foreach ($requiredPath in @(
-        (Join-Path $scriptRoot 'provision.sh'),
+        (Join-Path $scriptRoot 'files/provision.sh'),
         (Join-Path $scriptRoot 'files/wsl.conf'),
         (Join-Path $scriptRoot 'files/wsl-distribution.conf'),
-        (Join-Path $scriptRoot 'tests/isolation-runtime.sh'),
-        (Join-Path $scriptRoot 'onboard-agent-distro')
+        (Join-Path $scriptRoot 'files/isolation-runtime.sh'),
+        (Join-Path $scriptRoot 'files/onboard-agent-distro')
     )) {
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) { throw "required project file is missing: $requiredPath" }
     }
@@ -85,9 +85,9 @@ try {
     $wslDistributionConfig = Join-Path $scriptRoot 'files/wsl-distribution.conf'
     $overlayDirectory = Join-Path $workingDirectory 'rootfs-overlay'
     New-Item -ItemType Directory -Path (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files') -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $scriptRoot 'provision.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/provision.sh')
-    Copy-Item -LiteralPath (Join-Path $scriptRoot 'tests/isolation-runtime.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/isolation-runtime.sh')
-    Copy-Item -LiteralPath (Join-Path $scriptRoot 'onboard-agent-distro') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/onboard-agent-distro')
+    Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/provision.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/provision.sh')
+    Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/isolation-runtime.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/isolation-runtime.sh')
+    Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/onboard-agent-distro') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/onboard-agent-distro')
     Copy-Item -LiteralPath $wslConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl.conf')
     Copy-Item -LiteralPath $wslDistributionConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl-distribution.conf')
     Invoke-Checked $tarPath @('-rf', $rootfsTar, '-C', $overlayDirectory, 'opt/wsl-dev-builder/provision.sh', 'opt/wsl-dev-builder/files/wsl.conf', 'opt/wsl-dev-builder/files/wsl-distribution.conf', 'opt/wsl-dev-builder/files/isolation-runtime.sh', 'opt/wsl-dev-builder/files/onboard-agent-distro') 'adding provisioning inputs to rootfs archive'

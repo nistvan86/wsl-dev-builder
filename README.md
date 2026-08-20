@@ -29,7 +29,7 @@ This isolation branch disables automatic Windows filesystem mounts, `/etc/fstab`
 
 This image enables systemd; the builder validates systemd as PID 1 and developer tooling is validated during build and onboarding. The reserved temporary WSL distro name is `__wsl_builder`. The builder may unregister exactly that name at startup or during cleanup, so do not use it for another purpose.
 
-Run `./host-isolation-audit.ps1` from PowerShell for a read-only report of WSL version/status, global `.wslconfig`, WSLg, networking mode, Hyper-V firewall visibility, and Docker Desktop indicators. The audit never changes host-wide settings. Docker Desktop WSL Integration must remain disabled for this distro; WSLg is reported as an optional host-wide integration surface.
+Run `.\files\host-isolation-audit.ps1` from PowerShell for a read-only report of WSL version/status, global `.wslconfig`, WSLg, networking mode, Hyper-V firewall visibility, and Docker Desktop indicators. The audit never changes host-wide settings. Docker Desktop WSL Integration must remain disabled for this distro; WSLg is reported as an optional host-wide integration surface.
 
 ## Install and test
 
@@ -43,7 +43,7 @@ wsl -d __wsl_poc_test -- onboard-agent-distro
 wsl --unregister __wsl_poc_test
 ```
 
-`provision.sh` owns package selection, Ubuntu configuration, user setup, and Linux-side build validation. The editable base utility list is near the top of that file. The builder runs `tests/isolation-runtime.sh` before exporting the artifact; the audit is not repeated after deployment.
+`files/provision.sh` owns package selection, Ubuntu configuration, user setup, and Linux-side build validation. The editable base utility list is near the top of that file. The builder runs `files/isolation-runtime.sh` before exporting the artifact; the audit is not repeated after deployment.
 
 The `ubuntu` Bash prompt evaluates `WSL_DISTRO_NAME` at runtime, so it shows the actual registered distro name. The reusable image contains no GitHub or Codex credentials.
 

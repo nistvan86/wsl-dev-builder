@@ -56,7 +56,7 @@ Do not redesign it.
 Keep:
 
 - `build.ps1` as the Windows-side image builder.
-- `provision.sh` as the Linux provisioning script.
+- `files/provision.sh` as the Linux provisioning script.
 - `files/wsl.conf` as distro-specific WSL configuration.
 - `files/wsl-distribution.conf`.
 - Direct `wsl.exe --install --from-file` for distro installation.
@@ -101,7 +101,7 @@ Security improvement: high against accidental host filesystem damage.
 
 This is the first useful cut point.
 
-**Implemented status:** `files/wsl.conf` disables automounting, fstab processing, Windows interop, and Windows PATH injection. `provision.sh` validates the exact settings. `build.ps1` checks the restarted default user, DrvFs mounts, that `/mnt/c` and `/mnt/d` are not mounted (empty mountpoint directories are tolerated), Windows executables, WSLInterop, and manual C: mounting. README guidance documents the resulting boundary and its root-user limitation.
+**Implemented status:** `files/wsl.conf` disables automounting, fstab processing, Windows interop, and Windows PATH injection. `files/provision.sh` validates the exact settings. `build.ps1` checks the restarted default user, DrvFs mounts, that `/mnt/c` and `/mnt/d` are not mounted (empty mountpoint directories are tolerated), Windows executables, WSLInterop, and manual C: mounting. README guidance documents the resulting boundary and its root-user limitation.
 
 WSL supports disabling automatic DrvFs mounts and Windows executable interop on a per-distro basis. `automount.enabled=false` does not disable DrvFs itself, so the non-root requirement in Stage 2 remains necessary.
 
@@ -144,7 +144,7 @@ Microsoft documents:
 - `interop.enabled=false` prevents launching Windows processes.
 - `appendWindowsPath=false` prevents Windows executable paths being appended to Linux `$PATH`.
 
-## 1.2 Add static validation to `provision.sh`
+## 1.2 Add static validation to `files/provision.sh`
 
 After installing `/etc/wsl.conf`, validate that it contains all four settings.
 
@@ -251,9 +251,9 @@ Security improvement: critical.
 
 This is the minimum stage recommended for actually running an autonomous agent.
 
-The current `provision.sh` installs `sudo`, puts `ubuntu` in the `sudo` group, and creates `ubuntu ALL=(ALL) NOPASSWD:ALL`. Remove all three behaviors.
+The current `files/provision.sh` installs `sudo`, puts `ubuntu` in the `sudo` group, and creates `ubuntu ALL=(ALL) NOPASSWD:ALL`. Remove all three behaviors.
 
-**Implemented status:** `provision.sh` no longer installs or configures sudo, locks root and ubuntu passwords, and rejects sudo, wheel, docker, lxd, disk, libvirt, and kvm group membership. `build.ps1` repeats the forbidden-group and absent-sudo checks, and README examples use a negative sudo test.
+**Implemented status:** `files/provision.sh` no longer installs or configures sudo, locks root and ubuntu passwords, and rejects sudo, wheel, docker, lxd, disk, libvirt, and kvm group membership. `build.ps1` repeats the forbidden-group and absent-sudo checks, and README examples use a negative sudo test.
 
 ## 2.1 Stop installing `sudo`
 
@@ -394,7 +394,7 @@ Security improvement: high for prompt-injected agents.
 
 The former Windows bootstrap wrapper reused an authenticated Windows `gh.exe` token and sent it into the distro through stdin. The current design removes that wrapper and performs onboarding inside the installed distro.
 
-**Implemented status:** `bootstrap.ps1` was removed. GitHub login and Codex device authentication are provided by `/usr/local/bin/onboard-agent-distro`, which runs inside the registered distro and never reads Windows credentials. `tests/isolation-runtime.sh` validates identity, mounts, interop, daemon sockets, protected paths, and developer tools during `build.ps1` before export; it is not run after `.wsl` deployment.
+**Implemented status:** `bootstrap.ps1` was removed. GitHub login and Codex device authentication are provided by `/usr/local/bin/onboard-agent-distro`, which runs inside the registered distro and never reads Windows credentials. `files/isolation-runtime.sh` validates identity, mounts, interop, daemon sockets, protected paths, and developer tools during `build.ps1` before export; it is not run after `.wsl` deployment.
 
 ## 3.1 Remove Windows GitHub token reuse
 
@@ -430,7 +430,7 @@ codex login --device-auth
 
 Authentication remains interactive and associated with the `ubuntu` account.
 
-## 3.3 Create `tests/isolation-runtime.sh`
+## 3.3 Create `files/isolation-runtime.sh`
 
 Add a dedicated test script.
 
@@ -526,7 +526,7 @@ This stage makes it harder for a hostile process to turn the non-root `ubuntu` a
 
 **Current implementation note:** The `unminimize` removal and GPU integration disablement are intentionally deferred. Provisioning continues to run `unminimize`, and `files/wsl.conf` does not disable GPU integration, while the image's package, runtime, and host-integration behavior are evaluated. SUID/SGID, capability, and privileged-path hardening remain active in this branch.
 
-**Implemented status:** `provision.sh` keeps the explicit package list, temporarily installs `libcap2-bin`, records and strips SUID/SGID bits, audits system/runtime roots for high-risk file capabilities, then purges the build-only capability tooling before final validation. The runtime test does not repeat SUID/SGID or capability audits. The capability scan intentionally excludes the large user data tree under `/home` to avoid an unbounded build scan. GPU integration remains at its default.
+**Implemented status:** `files/provision.sh` keeps the explicit package list, temporarily installs `libcap2-bin`, records and strips SUID/SGID bits, audits system/runtime roots for high-risk file capabilities, then purges the build-only capability tooling before final validation. The runtime test does not repeat SUID/SGID or capability audits. The capability scan intentionally excludes the large user data tree under `/home` to avoid an unbounded build scan. GPU integration remains at its default.
 
 ## 4.1 Remove `unminimize`
 
@@ -667,7 +667,7 @@ The current image deliberately enables systemd and validates that PID 1 is syste
 
 **Current implementation note:** The systemd removal is intentionally deferred. This branch continues to install and run systemd, retains the systemd-specific provisioning and masks, and validates systemd as PID 1. Revisit this stage only after testing the agent workflow without systemd.
 
-**Implemented status:** `files/wsl.conf` retains `systemd=true`; `provision.sh` installs systemd, systemd-sysv, and dbus, restores the systemd unit masks, and validates the packages and commands. `build.ps1` checks systemd as PID 1, and README retains the systemctl installation check.
+**Implemented status:** `files/wsl.conf` retains `systemd=true`; `files/provision.sh` installs systemd, systemd-sysv, and dbus, restores the systemd unit masks, and validates the packages and commands. `build.ps1` checks systemd as PID 1, and README retains the systemctl installation check.
 
 ## 5.1 Determine whether the agent actually needs systemd
 

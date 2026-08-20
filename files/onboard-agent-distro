@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+fail() { printf '[onboard] ERROR: %s\n' "$*" >&2; exit 1; }
+[[ "$(id -u)" == 1000 && "$(id -un)" == ubuntu ]] || fail 'must run as the default ubuntu user'
+
+for tool in gh codex node npm; do
+  command -v "$tool" >/dev/null 2>&1 || fail "required tool is missing: $tool"
+done
+
+printf '[onboard] authenticating GitHub inside this distro\n'
+gh auth login --hostname github.com --git-protocol https
+gh auth setup-git --hostname github.com
+gh auth status --hostname github.com
+
+printf '[onboard] authenticating Codex with device auth\n'
+bash -ilc 'codex login --device-auth'
+bash -ilc 'codex login status'
+
+printf '[onboard] completed for %s\n' "${WSL_DISTRO_NAME:-this distro}"
