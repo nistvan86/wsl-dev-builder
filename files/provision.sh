@@ -29,7 +29,7 @@ read_list_file() {
 
 parse_package_spec() {
   local spec="$1"
-  if [[ "$spec" =~ ^([a-z][a-z0-9-]*)(:([A-Za-z0-9][A-Za-z0-9._+-]*))?$ ]]; then
+  if [[ "$spec" =~ ^([a-z0-9][a-z0-9-]*)(:([A-Za-z0-9][A-Za-z0-9._+-]*))?$ ]]; then
     PACKAGE_NAME="${BASH_REMATCH[1]}"
     PACKAGE_VERSION="${BASH_REMATCH[3]:-}"
   else

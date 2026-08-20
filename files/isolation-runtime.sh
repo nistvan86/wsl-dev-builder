@@ -6,7 +6,7 @@ require() { "$@" || fail "invariant failed: $*"; }
 
 # This validator is executed directly, not through an interactive shell. Make
 # user-local tools and the provisioned nvm Node.js installation explicit.
-export PATH="/home/ubuntu/.local/bin:$PATH"
+export PATH="/home/ubuntu/bin:/home/ubuntu/.local/bin:$PATH"
 for node_bin in /home/ubuntu/.nvm/versions/node/*/bin; do
   if [[ -x "$node_bin/node" ]]; then
     export PATH="$node_bin:$PATH"

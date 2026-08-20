@@ -137,7 +137,7 @@ try {
     foreach ($systemPackage in $selectedBaseUtilities) { if ($systemPackage -notmatch '^[A-Za-z0-9.+:-]+$') { throw "invalid base utility package: $systemPackage" } }
     if ($ImageName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { throw "invalid image name: $ImageName" }
     foreach ($package in $selectedPackages) {
-        if ($package -notmatch '^[a-z][a-z0-9-]*(?::[A-Za-z0-9][A-Za-z0-9._+-]*)?$') { throw "invalid package spec: $package" }
+        if ($package -notmatch '^[a-z0-9][a-z0-9-]*(?::[A-Za-z0-9][A-Za-z0-9._+-]*)?$') { throw "invalid package spec: $package" }
     }
     $configuredDistributionDirectory = if ($settings.ContainsKey('DistributionDirectory')) { [string]$settings['DistributionDirectory'] } else { './dist' }
     $requestedDistributionDirectory = if ($DistributionDirectory) { $DistributionDirectory } else { $configuredDistributionDirectory }
