@@ -86,6 +86,20 @@ runuser -u ubuntu -- env HOME=/home/ubuntu NVM_DIR=/home/ubuntu/.nvm bash -c 'se
 log 'installing WSL configuration'
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl.conf" /etc/wsl.conf
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl-distribution.conf" /etc/wsl-distribution.conf
+validate_isolation_config() {
+  local section=''
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      "["*"]") section="$line" ;;
+      enabled=false) [[ "$section" == '[automount]' ]] && automount_enabled=false ;;
+      mountFsTab=false) [[ "$section" == '[automount]' ]] && automount_fstab=false ;;
+      appendWindowsPath=false) [[ "$section" == '[interop]' ]] && interop_path=false ;;
+    esac
+    [[ "$section" == '[interop]' && "$line" == 'enabled=false' ]] && interop_enabled=false
+  done < /etc/wsl.conf
+  [[ "${automount_enabled:-true}" == false && "${automount_fstab:-true}" == false && "${interop_enabled:-true}" == false && "${interop_path:-true}" == false ]] || die '/etc/wsl.conf does not disable automount and Windows interop'
+}
+validate_isolation_config
 install -d -o root -g root -m 0755 /etc/sudoers.d
 cat > /etc/sudoers.d/ubuntu <<'EOF'
 ubuntu ALL=(ALL) NOPASSWD:ALL
