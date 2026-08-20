@@ -62,13 +62,13 @@ add_unique() {
 append_unique_system_package() {
   local item="$1"
   [[ "$item" =~ ^[A-Za-z0-9.+:-]+$ ]] || die "invalid module system package: $item"
-  if add_unique "$item" "${MODULE_SYSTEM_PACKAGES[@]}"; then MODULE_SYSTEM_PACKAGES+=("$item"); fi
+  if ! add_unique "$item" "${MODULE_SYSTEM_PACKAGES[@]}"; then MODULE_SYSTEM_PACKAGES+=("$item"); fi
 }
 
 append_unique_required_tool() {
   local item="$1"
   [[ "$item" =~ ^[A-Za-z0-9._+-]+$ ]] || die "invalid required tool: $item"
-  if add_unique "$item" "${REQUIRED_TOOLS[@]}"; then REQUIRED_TOOLS+=("$item"); fi
+  if ! add_unique "$item" "${REQUIRED_TOOLS[@]}"; then REQUIRED_TOOLS+=("$item"); fi
 }
 
 resolve_package() {
