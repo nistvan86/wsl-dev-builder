@@ -61,6 +61,10 @@ Install an artifact by filename from `dist/`. The wrapper validates the image, e
 
 The first interactive launch automatically runs the distro-owned onboarding flow, which performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows. If onboarding is interrupted or fails, WSL keeps OOBE incomplete and retries it on the next interactive launch.
 
+## Agent-assisted instances
+
+This repository includes the project-local `wsl-dev-instance` agent skill. Ask an agent for a new developer distribution and describe the target project or required tooling; it inspects existing image manifests, reuses a suitable image when possible, or builds and installs a purpose-specific instance.
+
 Selected modules contribute their own tooling and onboarding steps. The default selection provides GitHub CLI, Node.js LTS through nvm, and Codex CLI. The image uses `ubuntu` (UID 1000), enables systemd, removes runtime `sudo`, disables automatic Windows-drive mounts and Windows PATH injection, and runs build-time privilege/isolation checks.
 
 
