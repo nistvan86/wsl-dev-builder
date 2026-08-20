@@ -6,7 +6,8 @@ param(
     [string[]]$AddBaseUtilities,
     [string]$DistributionDirectory,
     [string]$ImageName = 'ubuntu-dev',
-    [string]$ImageComment = ''
+    [string]$ImageComment = '',
+    [switch]$Rebuild
 )
 
 Set-StrictMode -Version Latest
@@ -32,6 +33,8 @@ $workingDirectory = $null
 $stagingImported = $false
 $artifactTemp = $null
 $manifestTemp = $null
+$artifact = $null
+$manifestPath = $null
 $preserveStaging = $false
 $defaultBaseUtilities = @('build-essential', 'g++', 'git', 'gh', 'make', 'mc', 'wget', 'curl', 'pkg-config')
 $defaultPackages = @('github', 'nodejs', 'codex')
@@ -111,6 +114,12 @@ try {
     $requestedDistributionDirectory = if ($DistributionDirectory) { $DistributionDirectory } else { $configuredDistributionDirectory }
     $distributionPath = if ([System.IO.Path]::IsPathRooted($requestedDistributionDirectory)) { $requestedDistributionDirectory } else { Join-Path $scriptRoot $requestedDistributionDirectory }
     $distributionPath = [System.IO.Path]::GetFullPath($distributionPath)
+    $date = Get-Date -Format 'yyyy-MM-dd'
+    $artifact = Join-Path $distributionPath "$ImageName-$date.wsl"
+    $manifestPath = "$artifact.txt"
+    if ((Test-Path -LiteralPath $artifact) -or (Test-Path -LiteralPath $manifestPath)) {
+        if (-not $Rebuild) { throw "artifact conflict: $artifact or $manifestPath already exists. Use -Rebuild to replace this image." }
+    }
 
     if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
         throw 'wsl.exe was not found. Enable Windows Subsystem for Linux and Virtual Machine Platform in Windows Features, reboot, and run "wsl --install" from an elevated PowerShell prompt.'
@@ -198,13 +207,6 @@ try {
     Write-Host '[6/6] Exporting final artifact'
     Invoke-Checked wsl.exe @('--terminate', $stagingName) 'staging termination before export'
     New-Item -ItemType Directory -Path $distributionPath -Force | Out-Null
-    $date = Get-Date -Format 'yyyy-MM-dd'
-    $index = 1
-    do {
-        $suffix = if ($index -eq 1) { '' } else { "-$index" }
-        $artifact = Join-Path $distributionPath "$ImageName-$date$suffix.wsl"
-        $index++
-    } while ((Test-Path -LiteralPath $artifact) -or (Test-Path -LiteralPath "$artifact.txt"))
     $artifactTemp = Join-Path $workingDirectory 'artifact.wsl.partial'
     $manifestTemp = Join-Path $workingDirectory 'artifact.wsl.txt.partial'
     $manifestLines = @(
@@ -229,9 +231,14 @@ try {
     if (-not (Test-Path -LiteralPath $artifactTemp -PathType Leaf)) { throw 'WSL export did not produce an artifact' }
     Invoke-Checked wsl.exe @('--unregister', $stagingName) 'staging distro cleanup'
     $stagingImported = $false
+    if ($Rebuild) {
+        foreach ($publishedPath in @($artifact, $manifestPath)) {
+            if (Test-Path -LiteralPath $publishedPath) { Remove-Item -LiteralPath $publishedPath -Force }
+        }
+    }
     Move-Item -LiteralPath $artifactTemp -Destination $artifact
     $artifactTemp = $null
-    Move-Item -LiteralPath $manifestTemp -Destination "$artifact.txt"
+    Move-Item -LiteralPath $manifestTemp -Destination $manifestPath
     $manifestTemp = $null
     Write-Host "Build succeeded: $artifact"
 }

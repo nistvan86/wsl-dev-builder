@@ -43,7 +43,9 @@ Before building, inspect `dist/*.wsl.txt` companion manifests. For each candidat
 
 An artifact is suitable only when its modules and base utilities cover the documented/requested requirements. Prefer the newest suitable artifact with a useful matching image comment. Do not treat a matching filename alone as sufficient.
 
-If a suitable artifact exists, reuse it; do not rebuild it. If no suitable artifact exists, choose:
+If a suitable artifact exists, reuse it; do not rebuild it. If the user explicitly requests a refresh of a specific image, read that image's `Rebuild command:` from its companion manifest and rerun the exact command with `-Rebuild` appended. `-Rebuild` intentionally replaces that artifact and its manifest; never use it for an image the user did not identify for refresh.
+
+If no suitable artifact exists, choose:
 
 - a short distinguishing `-ImageName`, such as `ubuntu-dev-web` or `ubuntu-dev-retroos`;
 - an `-ImageComment` that states the target project/purpose and the reason for non-default additions.
@@ -75,7 +77,7 @@ Run `build.ps1` from the project root. Keep artifact selection explicit. Example
 .\build.ps1 -Packages github,nodejs -ImageName ubuntu-dev-node
 ```
 
-Do not use `-KeepStagingOnFailure` unless inspecting a build failure. A failed build must not be used as an artifact.
+Do not use `-KeepStagingOnFailure` unless inspecting a build failure. A failed build must not be used as an artifact. A normal target conflict is intentional; use `-Rebuild` only for an explicitly requested refresh.
 
 ## 5. Install a new distro safely
 
