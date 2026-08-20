@@ -110,8 +110,8 @@ set -eu
 [ "$(id -u)" = 1000 ]
 [ "$(id -un)" = ubuntu ]
 ! findmnt -rn -t drvfs | grep -q .
-test ! -e /mnt/c
-test ! -e /mnt/d
+test ! -e /mnt/c || ! findmnt -rn /mnt/c
+test ! -e /mnt/d || ! findmnt -rn /mnt/d
 ! command -v cmd.exe
 ! command -v powershell.exe
 ! command -v explorer.exe

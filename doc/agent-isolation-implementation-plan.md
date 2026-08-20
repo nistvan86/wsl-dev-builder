@@ -111,7 +111,7 @@ Security improvement: high against accidental host filesystem damage.
 
 This is the first useful cut point.
 
-**Implemented status:** `files/wsl.conf` disables automounting, fstab processing, Windows interop, and Windows PATH injection. `provision.sh` validates the exact settings. `build.ps1` checks the restarted default user, DrvFs mounts, `/mnt/c`, `/mnt/d`, Windows executables, WSLInterop, and manual C: mounting. README guidance documents the resulting boundary and its root-user limitation.
+**Implemented status:** `files/wsl.conf` disables automounting, fstab processing, Windows interop, and Windows PATH injection. `provision.sh` validates the exact settings. `build.ps1` checks the restarted default user, DrvFs mounts, that `/mnt/c` and `/mnt/d` are not mounted (empty mountpoint directories are tolerated), Windows executables, WSLInterop, and manual C: mounting. README guidance documents the resulting boundary and its root-user limitation.
 
 WSL supports disabling automatic DrvFs mounts and Windows executable interop on a per-distro basis. `automount.enabled=false` does not disable DrvFs itself, so the non-root requirement in Stage 2 remains necessary.
 
