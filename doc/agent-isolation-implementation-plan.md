@@ -536,6 +536,8 @@ Security improvement: medium to high.
 
 This stage makes it harder for a hostile process to turn the non-root `ubuntu` account into root.
 
+**Current implementation note:** The `unminimize` removal is intentionally deferred. Provisioning continues to run `unminimize` while the image's package and runtime behavior are evaluated. The SUID/SGID, capability, privileged-path, and GPU hardening items remain active in this branch.
+
 ## 4.1 Remove `unminimize`
 
 The current provisioning explicitly runs Ubuntu's `unminimize` before installing the required development packages.
@@ -571,7 +573,7 @@ bubblewrap
 pkg-config
 ```
 
-First establish that removing `unminimize` does not break expected use.
+First establish that removing `unminimize` does not break expected use. This comparison is deferred until the current image behavior has been evaluated.
 
 Further package reduction can happen later.
 
@@ -672,6 +674,8 @@ Security improvement: moderate.
 This changes one of the repository's current design assumptions, so keep it separate.
 
 The current image deliberately enables systemd and validates that PID 1 is systemd.
+
+**Current implementation note:** The systemd removal is intentionally deferred. This branch continues to install and run systemd, retains the systemd-specific provisioning and masks, and validates systemd as PID 1. Revisit this stage only after testing the agent workflow without systemd.
 
 ## 5.1 Determine whether the agent actually needs systemd
 
