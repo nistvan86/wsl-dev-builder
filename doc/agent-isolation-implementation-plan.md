@@ -536,7 +536,7 @@ Security improvement: medium to high.
 
 This stage makes it harder for a hostile process to turn the non-root `ubuntu` account into root.
 
-**Current implementation note:** The `unminimize` removal is intentionally deferred. Provisioning continues to run `unminimize` while the image's package and runtime behavior are evaluated. The SUID/SGID, capability, privileged-path, and GPU hardening items remain active in this branch.
+**Current implementation note:** The `unminimize` removal and GPU integration disablement are intentionally deferred. Provisioning continues to run `unminimize`, and `files/wsl.conf` does not disable GPU integration, while the image's package, runtime, and host-integration behavior are evaluated. SUID/SGID, capability, and privileged-path hardening remain active in this branch.
 
 ## 4.1 Remove `unminimize`
 
@@ -651,7 +651,7 @@ enabled=false
 
 Microsoft documents this as the per-distro switch controlling access to the Windows GPU through paravirtualization.
 
-This is not required for filesystem protection, but removes an unnecessary host integration surface for a headless coding agent.
+This is not required for filesystem protection, but removes an unnecessary host integration surface for a headless coding agent. **Deferred in the current implementation:** GPU integration remains at its default because disabling it is intentionally postponed.
 
 ## Stage 4 commit
 
