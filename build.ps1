@@ -14,7 +14,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$stagingName = '__wsl_builder'
+$stagingName = '__wsl_dev_builder'
 $imageReference = 'ubuntu:24.04'
 $cranePath = Join-Path $scriptRoot 'crane.exe'
 $tarPath = $null

@@ -38,7 +38,7 @@ Retro game development environment with the retroos toolchain.
 '@
 ```
 
-Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. Use `-ImageName` to replace the default `ubuntu-dev` artifact-name prefix. Each image has an adjacent `.wsl.txt` manifest listing its Ubuntu base image, resolved modules, selected base utilities, an optional `-ImageComment`, and a fully resolved `build.ps1` replay command that does not depend on local settings. Project-contained output directories are recorded relative to `build.ps1` in that command. A target image or manifest conflict stops the build; pass `-Rebuild` only when intentionally refreshing that exact image. The builder reserves `__wsl_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
+Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. Use `-ImageName` to replace the default `ubuntu-dev` artifact-name prefix. Each image has an adjacent `.wsl.txt` manifest listing its Ubuntu base image, resolved modules, selected base utilities, an optional `-ImageComment`, and a fully resolved `build.ps1` replay command that does not depend on local settings. Project-contained output directories are recorded relative to `build.ps1` in that command. A target image or manifest conflict stops the build; pass `-Rebuild` only when intentionally refreshing that exact image. The builder reserves `__wsl_dev_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
 
 ## Install and onboard
 

@@ -19,7 +19,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
   - `onboard-agent-distro`
   - `wsl.conf`
   - `wsl-distribution.conf`
-- The staging distro is exactly `__wsl_builder`. It is reserved for this project. Cleanup may terminate or unregister only that exact name; never use partial or wildcard matching.
+- The staging distro is exactly `__wsl_dev_builder`. It is reserved for this project. Cleanup may terminate or unregister only that exact name; never use partial or wildcard matching.
 - The base image is `ubuntu:24.04`. `crane.exe` is supplied beside `build.ps1`; do not download it automatically and do not add Docker or Podman as a build dependency.
 - Keep the acquisition/staging boundary separate from provisioning so the backend can later change without rewriting Linux policy. Do not add WSLC support until it is stable and explicitly requested.
 
@@ -31,7 +31,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - Export to a temporary location first; only move a successful export to its final artifact name.
 - Name artifacts `<image-name>.wsl` (default image name: `ubuntu-dev`). `build.ps1 -ImageName` may choose another validated basename. Never overwrite an existing artifact or its `<image>.wsl.txt` companion manifest unless `build.ps1 -Rebuild` is explicitly requested.
 - Publish `<image>.wsl.txt` beside each artifact. It must record the OCI base image, build date, resolved modules, selected base utilities, the optional `build.ps1 -ImageComment`, and a fully resolved `build.ps1` replay command independent of local settings.
-- On ordinary failure, clean temporary files and `__wsl_builder` without masking the primary error. `build.ps1 -KeepStagingOnFailure` is the supported debugging path when the staging filesystem must be inspected.
+- On ordinary failure, clean temporary files and `__wsl_dev_builder` without masking the primary error. `build.ps1 -KeepStagingOnFailure` is the supported debugging path when the staging filesystem must be inspected.
 - Preserve the pre-existing `ubuntu` account. It must remain UID/GID `1000`; do not rename or recreate it.
 
 ## Image policy
@@ -43,7 +43,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - The `nodejs` module installs the latest Node.js LTS through nvm for `ubuntu`.
 - The `codex` module installs Codex with its official standalone installer, **not npm**.
 - Validate tooling both during provisioning and from a fresh interactive `ubuntu` shell.
-- Keep the prompt dynamic: it must evaluate `WSL_DISTRO_NAME` at runtime and must never embed `__wsl_builder`.
+- Keep the prompt dynamic: it must evaluate `WSL_DISTRO_NAME` at runtime and must never embed `__wsl_dev_builder`.
 
 ### Authentication and onboarding
 
@@ -93,7 +93,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 
 1. Run parser checks and focused tests first.
 2. Use a prior artifact and a disposable distro for iterative shell/provisioning tests when possible.
-3. Preserve `__wsl_builder` on failure only when inspection is needed, then unregister it explicitly.
+3. Preserve `__wsl_dev_builder` on failure only when inspection is needed, then unregister it explicitly.
 4. Run a full build after focused checks pass.
 5. Confirm the exported artifact, default user, systemd, fresh-shell tooling, isolation validation, and cleanup state.
 
