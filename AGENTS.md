@@ -29,7 +29,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - Provisioning and every required validation are fail-closed: a failure must prevent export.
 - Export to a temporary location first; only move a successful export to its final artifact name.
 - Name artifacts `<image-name>-YYYY-MM-DD.wsl` (default image name: `ubuntu-dev`), then use deterministic `-2`, `-3`, … suffixes. `build.ps1 -ImageName` may choose another validated basename. Never overwrite an existing artifact or its `<image>.wsl.txt` companion manifest.
-- Publish `<image>.wsl.txt` beside each artifact. It must record the OCI base image, resolved modules, and the selected base utilities.
+- Publish `<image>.wsl.txt` beside each artifact. It must record the OCI base image, resolved modules, selected base utilities, and the optional `build.ps1 -ImageComment`.
 - On ordinary failure, clean temporary files and `__wsl_builder` without masking the primary error. `build.ps1 -KeepStagingOnFailure` is the supported debugging path when the staging filesystem must be inspected.
 - Preserve the pre-existing `ubuntu` account. It must remain UID/GID `1000`; do not rename or recreate it.
 

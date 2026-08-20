@@ -5,7 +5,8 @@ param(
     [string[]]$BaseUtilities,
     [string[]]$AddBaseUtilities,
     [string]$DistributionDirectory,
-    [string]$ImageName = 'ubuntu-dev'
+    [string]$ImageName = 'ubuntu-dev',
+    [string]$ImageComment = ''
 )
 
 Set-StrictMode -Version Latest
@@ -200,12 +201,11 @@ try {
         'WSL Dev Builder image manifest'
         ''
         "Ubuntu base image: $imageReference"
-        ''
-        'Installed modules:'
-    ) + @($resolvedModules -split "`n") + @(
-        ''
-        'Base utilities:'
-    ) + $selectedBaseUtilities
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ImageComment)) {
+        $manifestLines += @('', 'Image comment:') + @($ImageComment -split "`r?`n")
+    }
+    $manifestLines += @('', 'Installed modules:') + @($resolvedModules -split "`n") + @('', 'Base utilities:') + $selectedBaseUtilities
     [System.IO.File]::WriteAllLines($manifestTemp, $manifestLines, [System.Text.UTF8Encoding]::new($false))
     Invoke-Checked wsl.exe @('--export', $stagingName, $artifactTemp) 'WSL export'
     if (-not (Test-Path -LiteralPath $artifactTemp -PathType Leaf)) { throw 'WSL export did not produce an artifact' }
