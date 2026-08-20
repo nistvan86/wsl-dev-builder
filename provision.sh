@@ -94,9 +94,15 @@ EOF
 runuser -u ubuntu -- env HOME=/home/ubuntu NVM_DIR=/home/ubuntu/.nvm bash -c 'set -Eeuo pipefail; export PATH="$HOME/.local/bin:$PATH"; . "$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; nvm --version; node --version; npm --version; command -v codex; codex --version' >/dev/null || die 'ubuntu developer tooling validation failed'
 
 log 'auditing and stripping SUID/SGID runtime files'
-find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print
-find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -exec chmod u-s,g-s {} +
+suid_sgid_files=()
+while IFS= read -r -d '' file; do suid_sgid_files+=("$file"); done < <(find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print0)
+printf '[provision] SUID/SGID files selected for stripping: %d\n' "${#suid_sgid_files[@]}"
+if (( ${#suid_sgid_files[@]} > 0 )); then
+  printf '[provision] stripping SUID/SGID: %s\n' "${suid_sgid_files[@]}"
+  chmod u-s,g-s "${suid_sgid_files[@]}"
+fi
 if find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print -quit | grep -q .; then die 'SUID or SGID runtime file remains'; fi
+log 'SUID/SGID stripping validation passed'
 log 'auditing Linux file capabilities'
 capability_roots=(/bin /sbin /usr /lib /lib64 /opt)
 capability_audit=$(getcap -r "${capability_roots[@]}" 2>/dev/null || true)
