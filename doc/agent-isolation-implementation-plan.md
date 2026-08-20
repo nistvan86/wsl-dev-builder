@@ -67,6 +67,8 @@ Keep:
 
 The current builder already separates Windows lifecycle handling from Linux provisioning, so preserve this separation.
 
+**Implemented status:** Stage 0 preserved that architecture on the `agent-isolation` branch. The lightweight `tests/bootstrap-selection.ps1` test passed. The unchanged baseline build was attempted, but WSL initially blocked import because the stale `__wsl_builder` registration was stuck in `Uninstalling` state; after unregistering it, the build reached provisioning and exposed a CRLF checkout issue, which was fixed with `.gitattributes` enforcing LF for shell scripts.
+
 ## 0.3 Run the existing lightweight test
 
 ```powershell
@@ -108,6 +110,8 @@ Complexity: low.
 Security improvement: high against accidental host filesystem damage.
 
 This is the first useful cut point.
+
+**Implemented status:** `files/wsl.conf` disables automounting, fstab processing, Windows interop, and Windows PATH injection. `provision.sh` validates the exact settings. `build.ps1` checks the restarted default user, DrvFs mounts, `/mnt/c`, `/mnt/d`, Windows executables, WSLInterop, and manual C: mounting. README guidance documents the resulting boundary and its root-user limitation.
 
 WSL supports disabling automatic DrvFs mounts and Windows executable interop on a per-distro basis. `automount.enabled=false` does not disable DrvFs itself, so the non-root requirement in Stage 2 remains necessary.
 
@@ -259,6 +263,8 @@ This is the minimum stage recommended for actually running an autonomous agent.
 
 The current `provision.sh` installs `sudo`, puts `ubuntu` in the `sudo` group, and creates `ubuntu ALL=(ALL) NOPASSWD:ALL`. Remove all three behaviors.
 
+**Implemented status:** `provision.sh` no longer installs or configures sudo, locks root and ubuntu passwords, and rejects sudo, wheel, docker, lxd, disk, libvirt, and kvm group membership. `build.ps1` repeats the forbidden-group and absent-sudo checks, and README examples use a negative sudo test.
+
 ## 2.1 Stop installing `sudo`
 
 Change:
@@ -397,6 +403,8 @@ Complexity: medium.
 Security improvement: high for prompt-injected agents.
 
 The current `bootstrap.ps1` reads an authenticated Windows `gh.exe` token and sends it into the distro through stdin when available. That means the agent may inherit the same GitHub credential scopes as the trusted Windows development environment.
+
+**Implemented status:** Windows `gh.exe` discovery and token reuse were removed; GitHub login always occurs interactively inside the distro. `tests/isolation-runtime.sh` validates identity, privilege, mounts, interop, daemon sockets, protected paths, and developer tools. The script is packaged into the image and run by both `build.ps1` and `bootstrap.ps1` before export or authentication; failures return non-zero and prevent authentication.
 
 ## 3.1 Remove Windows GitHub token reuse
 
@@ -538,6 +546,8 @@ This stage makes it harder for a hostile process to turn the non-root `ubuntu` a
 
 **Current implementation note:** The `unminimize` removal and GPU integration disablement are intentionally deferred. Provisioning continues to run `unminimize`, and `files/wsl.conf` does not disable GPU integration, while the image's package, runtime, and host-integration behavior are evaluated. SUID/SGID, capability, and privileged-path hardening remain active in this branch.
 
+**Implemented status:** `provision.sh` keeps the explicit package list, installs `libcap2-bin`, records and strips SUID/SGID bits, audits high-risk file capabilities, and validates protected paths through the runtime test. GPU integration remains at its default.
+
 ## 4.1 Remove `unminimize`
 
 The current provisioning explicitly runs Ubuntu's `unminimize` before installing the required development packages.
@@ -677,6 +687,8 @@ The current image deliberately enables systemd and validates that PID 1 is syste
 
 **Current implementation note:** The systemd removal is intentionally deferred. This branch continues to install and run systemd, retains the systemd-specific provisioning and masks, and validates systemd as PID 1. Revisit this stage only after testing the agent workflow without systemd.
 
+**Implemented status:** `files/wsl.conf` retains `systemd=true`; `provision.sh` installs systemd, systemd-sysv, and dbus, restores the systemd unit masks, and validates the packages and commands. `build.ps1` checks systemd as PID 1, and README retains the systemctl installation check.
+
 ## 5.1 Determine whether the agent actually needs systemd
 
 Test these without systemd:
@@ -776,6 +788,8 @@ Security improvement: situational.
 
 Important: do not automatically modify global WSL settings from `build.ps1` or `bootstrap.ps1`.
 
+**Implemented status:** `host-isolation-audit.ps1` is read-only and reports WSL/Windows versions, `.wslconfig`, WSLg, networking, Hyper-V firewall visibility, and Docker Desktop indicators. Runtime validation reports `/mnt/wslg`, rejects Docker availability, and checks daemon sockets; no host-wide setting is changed automatically.
+
 Microsoft documents that `.wslconfig` applies globally to all WSL 2 distributions, unlike `/etc/wsl.conf`, which is per distro.
 
 ## 6.1 Add `host-isolation-audit.ps1`
@@ -869,6 +883,8 @@ Security improvement: high against host-service attacks.
 
 This is where WSL-specific limitations become significant.
 
+**Implemented status:** No firewall rules are applied. README documents Normal Internet, global `networkingMode=none`, and explicit host-firewall policies, including their shared/global scope. Runtime validation reports default-gateway, host SMB/SSH, and common Docker-port reachability without failing by default.
+
 ## 7.1 Do not assume Hyper-V firewall policy is per distro
 
 Microsoft documents WSL Hyper-V firewall policy under the shared WSL `VMCreatorId`:
@@ -949,6 +965,8 @@ Security improvement: defense in depth.
 The image already installs `bubblewrap`.
 
 **Current implementation note:** Stage 8 is intentionally deferred and is not part of the current image. The WSL user, filesystem, host-integration, and runtime validation stages are the current stopping point; bubblewrap is not used to wrap Zed or another remote agent automatically.
+
+**Implemented status:** The launcher and its provisioning smoke tests were added and then completely removed. `bubblewrap` remains in the base utility list and is checked as available developer tooling, but no process-level sandbox is installed or invoked.
 
 Use it as an additional containment layer rather than relying only on the Linux user account.
 
