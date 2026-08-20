@@ -1,6 +1,6 @@
 ---
 name: wsl-dev-instance
-description: Build or reuse a WSL developer image from this project, install it as a uniquely named WSL 2 distro, and launch it interactively for first-run onboarding. Use when a user asks for a new developer WSL environment or a project-specific WSL instance.
+description: Build or install a WSL developer instance from this project as a uniquely named WSL 2 distro and provide the explicit launch command for first-run onboarding. Use when a user asks for a new developer WSL environment or a project-specific WSL instance.
 ---
 
 # Build and launch a WSL developer instance

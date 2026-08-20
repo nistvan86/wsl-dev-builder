@@ -50,7 +50,7 @@ Copy-Item .\install.settings.psd1.example .\install.settings.psd1
 
 Set `InstanceDirectory` in that ignored file, such as `D:\WSL\instances`. Leave it empty or omit the file to let WSL choose its default location.
 
-Install an artifact by filename from `dist/`. The wrapper validates the image, ensures the distro name is unused, creates `<InstanceDirectory>\<DistroName>` when configured, and launches the distro interactively:
+Install an artifact by filename from `dist/`. The wrapper validates the image, ensures the distro name is unused, creates `<InstanceDirectory>\<DistroName>` when configured, and does not launch the distro:
 
 ```powershell
 .\install.ps1 -ImageName ubuntu-dev.wsl -DistroName dev-foo
@@ -59,7 +59,7 @@ Install an artifact by filename from `dist/`. The wrapper validates the image, e
 .\install.ps1 -ImageName ubuntu-dev-retroos.wsl -DistroName dev-retroos -InstanceDirectory D:\WSL\instances
 ```
 
-The first interactive launch automatically runs the distro-owned onboarding flow, which performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows. If onboarding is interrupted or fails, WSL keeps OOBE incomplete and retries it on the next interactive launch.
+Launch the installed distro explicitly with `wsl.exe -d <distro-name>`. The first interactive launch automatically runs the distro-owned onboarding flow, which performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows. If onboarding is interrupted or fails, WSL keeps OOBE incomplete and retries it on the next interactive launch.
 
 ## Agent-assisted instances
 

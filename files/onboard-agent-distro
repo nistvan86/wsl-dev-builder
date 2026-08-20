@@ -24,12 +24,17 @@ if [[ ! -d "$onboard_directory" ]]; then
   exit 0
 fi
 
+reset_tty() {
+  if [[ -c /dev/tty ]]; then stty sane </dev/tty >/dev/null 2>&1 || true; fi
+}
+
 shopt -s nullglob
 contributors=("$onboard_directory"/*.sh)
 if (( ${#contributors[@]} == 0 )); then
   printf '[onboard] no onboarding scripts are installed\n'
 else
   for contributor in "${contributors[@]}"; do
+    reset_tty
     contributor_name=$(basename "$contributor" .sh)
     answer=''
     if [[ -r /dev/tty && -w /dev/tty ]]; then
@@ -38,6 +43,7 @@ else
     case "$answer" in
       y|Y|yes|YES|Yes)
         bash "$contributor"
+        reset_tty
         ;;
       *)
         printf '[onboard] skipped %s onboarding\n' "$contributor_name"

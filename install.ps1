@@ -50,7 +50,7 @@ if (Test-Path -LiteralPath $settingsPath -PathType Leaf) {
     }
 }
 
-$installArguments = @('--install', '--from-file', $artifactPath, '--name', $DistroName)
+$installArguments = @('--install', '--from-file', $artifactPath, '--name', $DistroName, '--no-launch')
 $configuredInstanceDirectory = if ($PSBoundParameters.ContainsKey('InstanceDirectory')) { $InstanceDirectory } elseif ($settings.ContainsKey('InstanceDirectory')) { [string]$settings['InstanceDirectory'] } else { '' }
 if (-not [string]::IsNullOrWhiteSpace($configuredInstanceDirectory)) {
     $baseDirectory = $configuredInstanceDirectory
@@ -71,6 +71,5 @@ if (-not [string]::IsNullOrWhiteSpace($configuredInstanceDirectory)) {
 Write-Host "Installing $imageLeafName as WSL distro $DistroName"
 Invoke-Checked wsl.exe $installArguments 'WSL distribution installation'
 
-Write-Host "Launching $DistroName interactively for first-run onboarding"
-& wsl.exe -d $DistroName
-if ($LASTEXITCODE -ne 0) { throw "interactive WSL launch failed with exit code $LASTEXITCODE" }
+Write-Host "Installation complete: $DistroName"
+Write-Host "Launch interactively for onboarding with: wsl.exe -d $DistroName"
