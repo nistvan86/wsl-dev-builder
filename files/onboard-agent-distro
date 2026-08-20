@@ -4,17 +4,27 @@ set -Eeuo pipefail
 fail() { printf '[onboard] ERROR: %s\n' "$*" >&2; exit 1; }
 [[ "$(id -u)" == 1000 && "$(id -un)" == ubuntu ]] || fail 'must run as the default ubuntu user'
 
-for tool in gh codex node npm; do
-  command -v "$tool" >/dev/null 2>&1 || fail "required tool is missing: $tool"
+# Onboarding runs directly from WSL, so establish the user-local and nvm paths
+# required by module contributors without relying on an inherited shell profile.
+export PATH="/home/ubuntu/.local/bin:$PATH"
+for node_bin in /home/ubuntu/.nvm/versions/node/*/bin; do
+  if [[ -x "$node_bin/node" ]]; then
+    export PATH="$node_bin:$PATH"
+    break
+  fi
 done
 
-printf '[onboard] authenticating GitHub inside this distro\n'
-gh auth login --hostname github.com --git-protocol https
-gh auth setup-git --hostname github.com
-gh auth status --hostname github.com
+onboard_directory=/usr/local/lib/wsl-dev-builder/onboard.d
+[[ -d "$onboard_directory" ]] || fail 'onboarding contributions are missing'
 
-printf '[onboard] authenticating Codex with device auth\n'
-bash -ilc 'codex login --device-auth'
-bash -ilc 'codex login status'
+shopt -s nullglob
+contributors=("$onboard_directory"/*.sh)
+if (( ${#contributors[@]} == 0 )); then
+  printf '[onboard] no selected packages require onboarding\n'
+else
+  for contributor in "${contributors[@]}"; do
+    bash "$contributor"
+  done
+fi
 
 printf '[onboard] completed for %s\n' "${WSL_DISTRO_NAME:-this distro}"

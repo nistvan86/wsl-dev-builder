@@ -1,0 +1,24 @@
+@{
+    # Relative paths are resolved from this file's project directory.
+    DistributionDirectory = './dist'
+
+    # Replaces the built-in base utilities when copied to build.settings.psd1.
+    BaseUtilities = @(
+        'build-essential'
+        'g++'
+        'git'
+        'gh'
+        'make'
+        'mc'
+        'wget'
+        'curl'
+        'pkg-config'
+    )
+
+    # Initial package modules. Dependencies are selected automatically.
+    Packages = @(
+        'github'
+        'nodejs'
+        'codex'
+    )
+}

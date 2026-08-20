@@ -51,9 +51,12 @@ for privileged_path in /etc /usr /opt; do
   fi
 done
 
-for tool in codex gh node npm bwrap; do
+required_tools_file=/usr/local/lib/wsl-dev-builder/required-tools.txt
+[[ -f "$required_tools_file" ]] || fail 'required tools manifest is missing'
+while IFS= read -r tool || [[ -n "$tool" ]]; do
+  [[ -z "$tool" ]] && continue
   command -v "$tool" >/dev/null 2>&1 || fail "required tool is missing: $tool"
-done
+done < "$required_tools_file"
 
 if [[ -e /mnt/wslg ]]; then
   printf '[isolation] report: /mnt/wslg exists (WSLg host integration is present)\n'

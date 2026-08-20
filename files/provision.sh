@@ -1,27 +1,116 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BASE_UTILITIES=(build-essential g++ git gh make mc wget curl bubblewrap pkg-config)
 CONFIG_DIR="${1:-}"
-if [[ -z "$CONFIG_DIR" || ! -d "$CONFIG_DIR" ]]; then echo 'provision.sh: configuration directory is required' >&2; exit 2; fi
+BASE_UTILITIES_FILE="${2:-}"
+SELECTED_PACKAGES_FILE="${3:-}"
+PACKAGES_DIR="${4:-}"
+
 log() { printf '[provision] %s\n' "$*"; }
 die() { printf '[provision] ERROR: %s\n' "$*" >&2; exit 1; }
 is_wsl_environment() { grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease /proc/version 2>/dev/null; }
+
 [[ "$(id -u)" == 0 ]] || die 'must run as root'
 command -v apt-get >/dev/null || die 'apt-get is unavailable'
+[[ -d "$CONFIG_DIR" ]] || die 'configuration directory is required'
+[[ -f "$BASE_UTILITIES_FILE" ]] || die 'base utilities file is required'
+[[ -f "$SELECTED_PACKAGES_FILE" ]] || die 'selected packages file is required'
+[[ -d "$PACKAGES_DIR" ]] || die 'packages directory is required'
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 
+read_list_file() {
+  local file="$1" item
+  while IFS= read -r item || [[ -n "$item" ]]; do
+    item="${item%%#*}"
+    item="${item//[$'\t\r ']/}"
+    [[ -n "$item" ]] && printf '%s\n' "$item"
+  done < "$file"
+}
+
+validate_package_name() {
+  [[ "$1" =~ ^[a-z][a-z0-9-]*$ ]] || die "invalid package module name: $1"
+}
+
+mapfile -t BASE_UTILITIES < <(read_list_file "$BASE_UTILITIES_FILE")
+(( ${#BASE_UTILITIES[@]} > 0 )) || die 'at least one base utility is required'
+for system_package in "${BASE_UTILITIES[@]}"; do
+  [[ "$system_package" =~ ^[A-Za-z0-9.+:-]+$ ]] || die "invalid base utility package: $system_package"
+done
+
+# Resolve module dependencies depth-first. A module can supply newline-delimited
+# dependencies.txt, system-packages.txt, and required-tools.txt plus optional
+# provision.sh and onboard.sh contributors.
+declare -A PACKAGE_STATE=()
+declare -a RESOLVED_PACKAGES=()
+declare -a MODULE_SYSTEM_PACKAGES=()
+declare -a REQUIRED_TOOLS=()
+
+add_unique() {
+  local item="$1" existing
+  shift
+  for existing in "$@"; do [[ "$existing" == "$item" ]] && return; done
+  return 1
+}
+
+append_unique_system_package() {
+  local item="$1"
+  [[ "$item" =~ ^[A-Za-z0-9.+:-]+$ ]] || die "invalid module system package: $item"
+  if add_unique "$item" "${MODULE_SYSTEM_PACKAGES[@]}"; then MODULE_SYSTEM_PACKAGES+=("$item"); fi
+}
+
+append_unique_required_tool() {
+  local item="$1"
+  [[ "$item" =~ ^[A-Za-z0-9._+-]+$ ]] || die "invalid required tool: $item"
+  if add_unique "$item" "${REQUIRED_TOOLS[@]}"; then REQUIRED_TOOLS+=("$item"); fi
+}
+
+resolve_package() {
+  local package="$1" dependency file
+  validate_package_name "$package"
+  case "${PACKAGE_STATE[$package]:-}" in
+    done) return ;;
+    visiting) die "package dependency cycle includes: $package" ;;
+  esac
+  [[ -d "$PACKAGES_DIR/$package" ]] || die "unknown package module: $package"
+  PACKAGE_STATE["$package"]=visiting
+
+  file="$PACKAGES_DIR/$package/dependencies.txt"
+  if [[ -f "$file" ]]; then
+    while IFS= read -r dependency; do resolve_package "$dependency"; done < <(read_list_file "$file")
+  fi
+
+  file="$PACKAGES_DIR/$package/system-packages.txt"
+  if [[ -f "$file" ]]; then
+    while IFS= read -r dependency; do append_unique_system_package "$dependency"; done < <(read_list_file "$file")
+  fi
+
+  file="$PACKAGES_DIR/$package/required-tools.txt"
+  if [[ -f "$file" ]]; then
+    while IFS= read -r dependency; do append_unique_required_tool "$dependency"; done < <(read_list_file "$file")
+  fi
+
+  PACKAGE_STATE["$package"]=done
+  RESOLVED_PACKAGES+=("$package")
+}
+
+while IFS= read -r package; do resolve_package "$package"; done < <(read_list_file "$SELECTED_PACKAGES_FILE")
+
+log 'selected package modules:' "${RESOLVED_PACKAGES[*]:-none}"
 log 'updating package indexes'; apt-get update
 log 'upgrading the base image'; apt-get -y upgrade
 command -v unminimize >/dev/null || die 'unminimize is unavailable in the supplied Ubuntu base image'
 log 'unminimizing Ubuntu'
 set +o pipefail; printf 'y\n' | unminimize; unminimize_status=${PIPESTATUS[1]}; set -o pipefail
 (( unminimize_status == 0 )) || die "unminimize failed with status $unminimize_status"
-log 'installing required packages'
-apt-get install -y --no-install-recommends locales systemd systemd-sysv dbus libcap2-bin ca-certificates apt-utils "${BASE_UTILITIES[@]}"
+
+CORE_SYSTEM_PACKAGES=(locales systemd systemd-sysv dbus libcap2-bin ca-certificates apt-utils)
+log 'installing base utilities and module system dependencies'
+apt-get install -y --no-install-recommends "${CORE_SYSTEM_PACKAGES[@]}" "${BASE_UTILITIES[@]}" "${MODULE_SYSTEM_PACKAGES[@]}"
+
 log 'configuring locale'
 if [[ -f /etc/locale.gen ]]; then sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; locale-gen en_US.UTF-8; fi
 update-locale LANG=en_US.UTF-8
+
 getent passwd ubuntu >/dev/null || die 'required user ubuntu is missing'
 ubuntu_uid=$(id -u ubuntu); ubuntu_gid=$(id -g ubuntu)
 [[ "$ubuntu_uid" == 1000 && "$ubuntu_gid" == 1000 ]] || die 'ubuntu must have UID/GID 1000'
@@ -42,7 +131,7 @@ if is_wsl_environment; then
   runuser -u ubuntu -- env HOME=/home/ubuntu bash -c '
     set -Eeuo pipefail
     if ! grep -Fq "# wsl-dev-builder runtime WSL prompt" "$HOME/.bashrc"; then
-      cat >> "$HOME/.bashrc" <<'EOF'
+      cat >> "$HOME/.bashrc" <<'"'"'EOF'"'"'
 
 # wsl-dev-builder runtime WSL prompt
 export PS1="\[\e]0;\u@\${WSL_DISTRO_NAME}: \w\a\]\[\033[01;32m\]\u@\${WSL_DISTRO_NAME}\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$"
@@ -51,47 +140,23 @@ EOF
   '
 fi
 
-log 'installing nvm, the latest Node.js LTS, and Codex CLI for ubuntu'
-NVM_VERSION='v0.40.6'
-runuser -u ubuntu -- env HOME=/home/ubuntu NVM_DIR=/home/ubuntu/.nvm bash -c '
-  set -Eeuo pipefail
-  mkdir -p "$NVM_DIR"
-  installer=$(mktemp)
-  trap "rm -f \"$installer\"" EXIT
-  curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/'"$NVM_VERSION"'/install.sh" -o "$installer"
-  bash "$installer"
-  . "$NVM_DIR/nvm.sh"
-  nvm install --lts
-  set +e +u
-  nvm alias default "lts/*"; status=$?
-  if (( status == 0 )); then nvm use --lts >/dev/null; status=$?; fi
-  set -Eeuo pipefail
-  (( status == 0 )) || exit "$status"
-  if ! grep -Fq "# wsl-dev-builder nvm" "$HOME/.bashrc"; then
-    cat >> "$HOME/.bashrc" <<EOF
-
-# wsl-dev-builder nvm
-export NVM_DIR="\$HOME/.nvm"
-[ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-[ -s "\$NVM_DIR/bash_completion" ] && . "\$NVM_DIR/bash_completion"
-[ -s "\$NVM_DIR/nvm.sh" ] && nvm use --silent default >/dev/null 2>&1 || true
-[ -s "\$NVM_DIR/nvm.sh" ] && export PATH="\$NVM_DIR/versions/node/\$(nvm version default)/bin:\$PATH"
-EOF
+for package in "${RESOLVED_PACKAGES[@]}"; do
+  contributor="$PACKAGES_DIR/$package/provision.sh"
+  if [[ -f "$contributor" ]]; then
+    log "running provision contributor: $package"
+    bash "$contributor"
   fi
-  if ! grep -Fq "# wsl-dev-builder local bin" "$HOME/.bashrc"; then
-    cat >> "$HOME/.bashrc" <<EOF
+done
 
-# wsl-dev-builder local bin
-export PATH="\$HOME/.local/bin:\$PATH"
-EOF
+install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder/onboard.d
+: > /usr/local/lib/wsl-dev-builder/required-tools.txt
+for package in "${RESOLVED_PACKAGES[@]}"; do
+  contributor="$PACKAGES_DIR/$package/onboard.sh"
+  if [[ -f "$contributor" ]]; then
+    install -o root -g root -m 0755 "$contributor" "/usr/local/lib/wsl-dev-builder/onboard.d/$package.sh"
   fi
-  codex_install_script=$(mktemp)
-  trap "rm -f \"$codex_install_script\"" EXIT
-  curl -fsSL https://chatgpt.com/codex/install.sh -o "$codex_install_script"
-  CODEX_NON_INTERACTIVE=1 sh "$codex_install_script"
-'
-
-runuser -u ubuntu -- env HOME=/home/ubuntu NVM_DIR=/home/ubuntu/.nvm bash -c 'set -Eeuo pipefail; export PATH="$HOME/.local/bin:$PATH"; . "$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; nvm --version; node --version; npm --version; command -v codex; codex --version' >/dev/null || die 'ubuntu developer tooling validation failed'
+done
+for tool in "${REQUIRED_TOOLS[@]}"; do printf '%s\n' "$tool"; done > /usr/local/lib/wsl-dev-builder/required-tools.txt
 
 log 'auditing and stripping SUID/SGID runtime files'
 suid_sgid_files=()
@@ -103,6 +168,7 @@ if (( ${#suid_sgid_files[@]} > 0 )); then
 fi
 if find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print -quit | grep -q .; then die 'SUID or SGID runtime file remains'; fi
 log 'SUID/SGID stripping validation passed'
+
 log 'auditing Linux file capabilities'
 capability_roots=(/bin /sbin /usr /lib /lib64 /opt)
 capability_audit=$(getcap -r "${capability_roots[@]}" 2>/dev/null || true)
@@ -110,16 +176,14 @@ printf '%s\n' "$capability_audit"
 if printf '%s\n' "$capability_audit" | grep -Eiq 'cap_(sys_admin|dac_override|dac_read_search|sys_ptrace|sys_module|sys_rawio|setuid|setgid)'; then die 'high-risk Linux file capability detected'; fi
 log 'removing build-only capability audit tooling'
 apt-get purge -y --auto-remove libcap2-bin
+
 log 'installing WSL configuration'
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl.conf" /etc/wsl.conf
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl-distribution.conf" /etc/wsl-distribution.conf
-if [[ -f "$CONFIG_DIR/isolation-runtime.sh" ]]; then
-  install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder
-  install -o root -g root -m 0755 "$CONFIG_DIR/isolation-runtime.sh" /usr/local/lib/wsl-dev-builder/isolation-runtime.sh
-fi
-if [[ -f "$CONFIG_DIR/onboard-agent-distro" ]]; then
-  install -o root -g root -m 0755 "$CONFIG_DIR/onboard-agent-distro" /usr/local/bin/onboard-agent-distro
-fi
+install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder
+install -o root -g root -m 0755 "$CONFIG_DIR/isolation-runtime.sh" /usr/local/lib/wsl-dev-builder/isolation-runtime.sh
+install -o root -g root -m 0755 "$CONFIG_DIR/onboard-agent-distro" /usr/local/bin/onboard-agent-distro
+
 validate_isolation_config() {
   local section=''
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -139,7 +203,9 @@ for unit in systemd-resolved.service systemd-networkd.service NetworkManager.ser
 log 'cleaning apt metadata'; rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 log 'validating the provisioned image'
 source /etc/os-release; [[ "${ID:-}" == ubuntu && "${VERSION_ID:-}" == 24.04 ]] || die 'image is not Ubuntu 24.04'
-for package in systemd systemd-sysv dbus "${BASE_UTILITIES[@]}"; do dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $package"; done
+for system_package in "${CORE_SYSTEM_PACKAGES[@]}" "${BASE_UTILITIES[@]}" "${MODULE_SYSTEM_PACKAGES[@]}"; do
+  dpkg-query -W -f='${Status}' "$system_package" 2>/dev/null | grep -q 'install ok installed' || die "package is not installed: $system_package"
+done
 ! command -v getcap || die 'build-only getcap tooling remains installed'
 command -v systemd >/dev/null; command -v systemctl >/dev/null
 ! command -v sudo || die 'sudo must not be installed'

@@ -9,7 +9,9 @@ The current target is **reduced accidental Windows integration and reduced Linux
 ## Architecture
 
 - `build.ps1` is the thin Windows orchestration layer. It owns prerequisite checks, WSL lifecycle operations, archive staging, export, artifact naming, and cleanup.
-- `files/provision.sh` is the authoritative portable Linux provisioning policy. Keep package selection, Ubuntu configuration, user configuration, and Linux-side validation here.
+- `files/provision.sh` is the authoritative portable Linux provisioning policy. It resolves selected package modules, installs their declared system dependencies, runs provisioning contributors, and installs their onboarding/validation contributions.
+- `build.settings.psd1` is an optional, ignored user settings file. `build.settings.psd1.example` is the committed template. Keep it restricted to `DistributionDirectory`, `BaseUtilities`, and `Packages` data.
+- `packages/<name>/` defines an installable module. It may contain `dependencies.txt`, `system-packages.txt`, `required-tools.txt`, `provision.sh`, and `onboard.sh`. Dependency resolution is depth-first and fails on missing modules or cycles; provision and onboarding hooks run only for the resolved selection.
 - `files/` contains all non-PowerShell operational scripts and WSL configuration:
   - `provision.sh`
   - `isolation-runtime.sh`
@@ -34,10 +36,10 @@ The current target is **reduced accidental Windows integration and reduced Linux
 
 ### Developer tooling
 
-- Keep the explicit editable base package list near the top of `files/provision.sh`.
-- The image currently includes Git/GitHub CLI, compiler and build tooling, `mc`, `wget`, `curl`, `bubblewrap`, `make`, and `pkg-config`.
-- Install the latest Node.js LTS through nvm for `ubuntu`.
-- Install Codex with its official standalone installer, **not npm**.
+- Default base utilities are `build-essential`, `g++`, `git`, `gh`, `make`, `mc`, `wget`, `curl`, and `pkg-config`. User settings or `build.ps1` parameters may replace or extend this list.
+- Default modules are `github`, `nodejs`, and `codex`. Codex depends on Node.js; modules must declare all dependencies and APT system dependencies explicitly.
+- The `nodejs` module installs the latest Node.js LTS through nvm for `ubuntu`.
+- The `codex` module installs Codex with its official standalone installer, **not npm**.
 - Validate tooling both during provisioning and from a fresh interactive `ubuntu` shell.
 - Keep the prompt dynamic: it must evaluate `WSL_DISTRO_NAME` at runtime and must never embed `__wsl_builder`.
 
@@ -70,7 +72,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - `WSLInterop` is host-managed and can remain registered despite `interop.enabled=false`. Do not make its presence a build failure and do not claim WSL prevents deliberate execution of a Windows PE binary stored on the Linux filesystem.
 - WSL-only controls are not a hard boundary against a successful Linux-root compromise. Use a separate VM if that guarantee is required.
 - `unminimize`, systemd, and default GPU integration intentionally remain enabled.
-- `bubblewrap` remains available as a tool, but do not add an automatic Bubblewrap launcher or process-level agent sandbox unless explicitly requested.
+- Do not add an automatic Bubblewrap launcher or process-level agent sandbox unless explicitly requested. Bubblewrap may be selected as an additional base utility or supplied by a module.
 - Do not change global `.wslconfig`, WSLg, networking, or Hyper-V firewall policy automatically. Any host-wide hardening requires explicit user opt-in.
 - Docker Desktop WSL integration must remain disabled for distros built from this image.
 
