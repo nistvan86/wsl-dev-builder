@@ -4,6 +4,16 @@ set -Eeuo pipefail
 fail() { printf '[isolation] FAILED: %s\n' "$*" >&2; exit 1; }
 require() { "$@" || fail "invariant failed: $*"; }
 
+# This validator is executed directly, not through an interactive shell. Make
+# user-local tools and the provisioned nvm Node.js installation explicit.
+export PATH="/home/ubuntu/.local/bin:$PATH"
+for node_bin in /home/ubuntu/.nvm/versions/node/*/bin; do
+  if [[ -x "$node_bin/node" ]]; then
+    export PATH="$node_bin:$PATH"
+    break
+  fi
+done
+
 require test "$(id -un)" = ubuntu
 require test "$(id -u)" = 1000
 ! command -v sudo >/dev/null 2>&1 || fail 'sudo executable is present'
