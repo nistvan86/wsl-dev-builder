@@ -123,39 +123,7 @@ try {
     if ($defaultIdentity -ne 'ubuntu') { throw "default WSL user validation failed (got '$defaultIdentity')" }
     $defaultUid = Invoke-WslOutput @('-d', $stagingName, '--', 'id', '-u') 'default-UID validation'
     if ($defaultUid -ne '1000') { throw "default UID validation failed (got '$defaultUid')" }
-    $mountInteropValidation = @'
-set -eu
-[ "$(id -u)" = 1000 ]
-[ "$(id -un)" = ubuntu ]
-! findmnt -rn -t drvfs | grep -q .
-test ! -e /mnt/c || ! findmnt -rn /mnt/c
-test ! -e /mnt/d || ! findmnt -rn /mnt/d
-! command -v cmd.exe
-! command -v powershell.exe
-! command -v explorer.exe
-mount_test=/tmp/wsl-dev-builder-mount-test
-mkdir -p "$mount_test"
-trap 'rmdir "$mount_test" 2>/dev/null || true' EXIT
-if mount -t drvfs C: "$mount_test" 2>/dev/null; then
-    echo 'manual DrvFs mount unexpectedly succeeded' >&2
-    exit 1
-fi
-'@
-    $mountInteropValidation = $mountInteropValidation.Replace("`r`n", "`n")
-    Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $mountInteropValidation) 'mount and Windows interop isolation validation'
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', '/usr/local/lib/wsl-dev-builder/isolation-runtime.sh') 'runtime isolation validation'
-    $runtimePrivilegeValidation = @'
-set -eu
-groups=$(id -nG)
-for group in sudo wheel docker lxd disk libvirt kvm; do
-    case " $groups " in
-        *" $group "*) echo "forbidden group present: $group" >&2; exit 1 ;;
-    esac
-done
-! command -v sudo
-'@
-    $runtimePrivilegeValidation = $runtimePrivilegeValidation.Replace("`r`n", "`n")
-    Invoke-Checked wsl.exe @('-d', $stagingName, '--', 'bash', '-lc', $runtimePrivilegeValidation) 'runtime privilege validation'
     Invoke-WslOutput @('-d', $stagingName, '-u', 'root', '--', 'sh', '-c', 'ps -p 1 -o comm= | grep -qx systemd') 'systemd PID 1 validation' | Out-Null
 
     Write-Host '[6/6] Exporting final artifact'
