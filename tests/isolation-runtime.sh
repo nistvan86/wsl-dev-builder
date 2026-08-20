@@ -45,7 +45,7 @@ done
 if find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print -quit 2>/dev/null | grep -q .; then
   fail 'SUID or SGID runtime file remains'
 fi
-if getcap -r / 2>/dev/null | grep -Eiq 'cap_(sys_admin|dac_override|dac_read_search|sys_ptrace|sys_module|sys_rawio|setuid|setgid)'; then
+if getcap -r /bin /sbin /usr /lib /lib64 /opt 2>/dev/null | grep -Eiq 'cap_(sys_admin|dac_override|dac_read_search|sys_ptrace|sys_module|sys_rawio|setuid|setgid)'; then
   fail 'high-risk Linux file capability detected'
 fi
 

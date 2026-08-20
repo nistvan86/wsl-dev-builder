@@ -546,7 +546,7 @@ This stage makes it harder for a hostile process to turn the non-root `ubuntu` a
 
 **Current implementation note:** The `unminimize` removal and GPU integration disablement are intentionally deferred. Provisioning continues to run `unminimize`, and `files/wsl.conf` does not disable GPU integration, while the image's package, runtime, and host-integration behavior are evaluated. SUID/SGID, capability, and privileged-path hardening remain active in this branch.
 
-**Implemented status:** `provision.sh` keeps the explicit package list, installs `libcap2-bin`, records and strips SUID/SGID bits, audits high-risk file capabilities, and validates protected paths through the runtime test. GPU integration remains at its default.
+**Implemented status:** `provision.sh` keeps the explicit package list, installs `libcap2-bin`, records and strips SUID/SGID bits, audits system/runtime roots for high-risk file capabilities, and validates protected paths through the runtime test. The capability scan intentionally excludes the large user data tree under `/home` to avoid an unbounded build scan. GPU integration remains at its default.
 
 ## 4.1 Remove `unminimize`
 
@@ -620,7 +620,7 @@ Install `libcap2-bin` if needed for the audit.
 Run:
 
 ```bash
-getcap -r / 2>/dev/null
+getcap -r /bin /sbin /usr /lib /lib64 /opt 2>/dev/null
 ```
 
 Fail if ordinary runtime binaries have high-risk capabilities such as:

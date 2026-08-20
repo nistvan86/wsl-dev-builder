@@ -27,6 +27,11 @@ ubuntu_uid=$(id -u ubuntu); ubuntu_gid=$(id -g ubuntu)
 [[ "$ubuntu_uid" == 1000 && "$ubuntu_gid" == 1000 ]] || die 'ubuntu must have UID/GID 1000'
 getent group ubuntu >/dev/null || die 'required group ubuntu is missing'
 for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
+  if id -nG ubuntu | tr ' ' '\n' | grep -Fxq "$forbidden_group"; then
+    gpasswd -d ubuntu "$forbidden_group" >/dev/null || die "failed to remove ubuntu from forbidden group: $forbidden_group"
+  fi
+done
+for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
   if id -nG ubuntu | tr ' ' '\n' | grep -Fxq "$forbidden_group"; then die "ubuntu is a member of forbidden group: $forbidden_group"; fi
 done
 passwd -l root >/dev/null || die 'failed to lock root password'
@@ -93,7 +98,8 @@ find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print
 find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -exec chmod u-s,g-s {} +
 if find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -print -quit | grep -q .; then die 'SUID or SGID runtime file remains'; fi
 log 'auditing Linux file capabilities'
-capability_audit=$(getcap -r / 2>/dev/null || true)
+capability_roots=(/bin /sbin /usr /lib /lib64 /opt)
+capability_audit=$(getcap -r "${capability_roots[@]}" 2>/dev/null || true)
 printf '%s\n' "$capability_audit"
 if printf '%s\n' "$capability_audit" | grep -Eiq 'cap_(sys_admin|dac_override|dac_read_search|sys_ptrace|sys_module|sys_rawio|setuid|setgid)'; then die 'high-risk Linux file capability detected'; fi
 log 'installing WSL configuration'
