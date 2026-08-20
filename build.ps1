@@ -124,7 +124,7 @@ try {
     $defaultUid = Invoke-WslOutput @('-d', $stagingName, '--', 'id', '-u') 'default-UID validation'
     if ($defaultUid -ne '1000') { throw "default UID validation failed (got '$defaultUid')" }
     $mountInteropValidation = @'
-set -eux
+set -eu
 [ "$(id -u)" = 1000 ]
 [ "$(id -un)" = ubuntu ]
 ! findmnt -rn -t drvfs | grep -q .
