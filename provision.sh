@@ -92,36 +92,36 @@ cat > /usr/local/bin/isolated-agent <<'EOF'
 set -Eeuo pipefail
 
 if [[ "${1:-}" == '--help' ]]; then
-  printf 'Usage: isolated-agent [agent-command [argument...]]\\n'
-  printf 'Runs the command, or codex by default, inside a bubblewrap sandbox.\\n'
+  printf 'Usage: isolated-agent [agent-command [argument...]]\n'
+  printf 'Runs the command, or codex by default, inside a bubblewrap sandbox.\n'
   exit 0
 fi
 command=("$@")
 if (( ${#command[@]} == 0 )); then command=(codex); fi
-exec bwrap \\
-  --die-with-parent \\
-  --new-session \\
-  --unshare-pid \\
-  --unshare-uts \\
-  --unshare-ipc \\
-  --unshare-user-try \\
-  --ro-bind /usr /usr \\
-  --ro-bind /bin /bin \\
-  --ro-bind /lib /lib \\
-  --ro-bind /lib64 /lib64 \\
-  --ro-bind /etc /etc \\
-  --ro-bind /usr/local /usr/local \\
-  --ro-bind /home/ubuntu /home/ubuntu \\
-  --bind /home/ubuntu/work /home/ubuntu/work \\
-  --bind /home/ubuntu/.codex /home/ubuntu/.codex \\
-  --bind /home/ubuntu/.cache /home/ubuntu/.cache \\
-  --proc /proc \\
-  --dev /dev \\
-  --tmpfs /run \\
-  --tmpfs /tmp \\
-  --chdir /home/ubuntu/work \\
-  --setenv HOME /home/ubuntu \\
-  --setenv PATH /home/ubuntu/.local/bin:/home/ubuntu/.nvm/versions/node/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\
+exec bwrap \
+  --die-with-parent \
+  --new-session \
+  --unshare-pid \
+  --unshare-uts \
+  --unshare-ipc \
+  --unshare-user-try \
+  --ro-bind /usr /usr \
+  --ro-bind /bin /bin \
+  --ro-bind /lib /lib \
+  --ro-bind /lib64 /lib64 \
+  --ro-bind /etc /etc \
+  --ro-bind /usr/local /usr/local \
+  --ro-bind /home/ubuntu /home/ubuntu \
+  --bind /home/ubuntu/work /home/ubuntu/work \
+  --bind /home/ubuntu/.codex /home/ubuntu/.codex \
+  --bind /home/ubuntu/.cache /home/ubuntu/.cache \
+  --proc /proc \
+  --dev /dev \
+  --tmpfs /run \
+  --tmpfs /tmp \
+  --chdir /home/ubuntu/work \
+  --setenv HOME /home/ubuntu \
+  --setenv PATH /home/ubuntu/.local/bin:/home/ubuntu/.nvm/versions/node/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   -- "${command[@]}"
 EOF
 chmod 0755 /usr/local/bin/isolated-agent
