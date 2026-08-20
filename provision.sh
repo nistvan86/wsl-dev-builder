@@ -106,6 +106,7 @@ log 'installing WSL configuration'
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl.conf" /etc/wsl.conf
 install -o root -g root -m 0644 "$CONFIG_DIR/wsl-distribution.conf" /etc/wsl-distribution.conf
 if [[ -f "$CONFIG_DIR/isolation-runtime.sh" ]]; then
+  install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder
   install -o root -g root -m 0755 "$CONFIG_DIR/isolation-runtime.sh" /usr/local/lib/wsl-dev-builder/isolation-runtime.sh
 fi
 validate_isolation_config() {
