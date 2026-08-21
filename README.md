@@ -17,7 +17,7 @@ Copy the template to create local settings:
 Copy-Item .\build.settings.psd1.example .\build.settings.psd1
 ```
 
-The settings file selects base Ubuntu utilities, package modules, and the artifact directory. Relative `DistributionDirectory` values are resolved from `build.ps1`, not the current PowerShell directory. Defaults install `github`, `nodejs`, and `codex`, use `build-essential`, `g++`, `git`, `gh`, `make`, `mc`, `wget`, `curl`, and `pkg-config`, and write artifacts to `./dist`.
+The settings file selects base Ubuntu utilities, package modules, and the artifact directory. Relative `DistributionDirectory` values are resolved from `build.ps1`, not the current PowerShell directory. Defaults install `github`, `nodejs`, `codex`, and `git-completion`, use `build-essential`, `g++`, `git`, `gh`, `make`, `mc`, `wget`, `curl`, and `pkg-config`, and write artifacts to `./dist`.
 
 ```powershell
 .\build.ps1

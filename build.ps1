@@ -37,7 +37,7 @@ $artifact = $null
 $manifestPath = $null
 $preserveStaging = $false
 $defaultBaseUtilities = @('build-essential', 'g++', 'git', 'gh', 'make', 'mc', 'wget', 'curl', 'pkg-config', 'openssh-client', 'htop')
-$defaultPackages = @('github', 'nodejs', 'codex')
+$defaultPackages = @('github', 'nodejs', 'codex', 'git-completion')
 $settingsPath = Join-Path $scriptRoot 'build.settings.psd1'
 $packageRoot = Join-Path $scriptRoot 'packages'
 

@@ -40,7 +40,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 ### Developer tooling
 
 - Default base utilities are `build-essential`, `g++`, `git`, `gh`, `make`, `mc`, `wget`, `curl`, and `pkg-config`. User settings or `build.ps1` parameters may replace or extend this list.
-- Default modules are `github`, `nodejs`, and `codex`. Codex depends on Node.js; modules must declare all dependencies and APT system dependencies explicitly.
+- Default modules are `github`, `nodejs`, `codex`, and `git-completion`. Codex depends on Node.js; modules must declare all dependencies and APT system dependencies explicitly.
 - The `nodejs` module installs the latest Node.js LTS through nvm for `ubuntu`.
 - The `codex` module installs Codex with its official standalone installer, **not npm**.
 - Validate tooling both during provisioning and from a fresh interactive `ubuntu` shell.
