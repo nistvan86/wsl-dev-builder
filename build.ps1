@@ -7,6 +7,8 @@ param(
     [string]$DistributionDirectory,
     [string]$ImageName = 'ubuntu-dev',
     [string]$ImageComment = '',
+    [switch]$AllowWindowsInterop,
+    [switch]$WindowsScratchDir,
     [switch]$Rebuild
 )
 
@@ -75,7 +77,7 @@ function ConvertTo-LinuxLineEndings {
 }
 
 function ConvertTo-PowerShellLiteral {
-    param([Parameter(Mandatory)][string]$Value)
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Value)
     "'" + $Value.Replace("'", "''") + "'"
 }
 
@@ -171,6 +173,8 @@ try {
         (Join-Path $scriptRoot 'files/wsl.conf'),
         (Join-Path $scriptRoot 'files/wsl-distribution.conf'),
         (Join-Path $scriptRoot 'files/isolation-runtime.sh'),
+        (Join-Path $scriptRoot 'files/mount-windows-scratch.sh'),
+        (Join-Path $scriptRoot 'files/configure-windows-scratch.sh'),
         (Join-Path $scriptRoot 'files/onboard-agent-distro')
     )) {
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) { throw "required project file is missing: $requiredPath" }
@@ -212,18 +216,41 @@ try {
     Copy-Item -Path (Join-Path $packageRoot '*') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/packages') -Recurse
     Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/provision.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/provision.sh')
     Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/isolation-runtime.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/isolation-runtime.sh')
+    Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/mount-windows-scratch.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/mount-windows-scratch.sh')
+    Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/configure-windows-scratch.sh') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/configure-windows-scratch.sh')
     Copy-Item -LiteralPath (Join-Path $scriptRoot 'files/onboard-agent-distro') -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/onboard-agent-distro')
-    Copy-Item -LiteralPath $wslConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl.conf')
+    $stagedWslConfig = Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl.conf'
+    Copy-Item -LiteralPath $wslConfig -Destination $stagedWslConfig
+    if ($AllowWindowsInterop -or $WindowsScratchDir) {
+        $configText = [System.IO.File]::ReadAllText($stagedWslConfig)
+        $interopPattern = '(?m)(^\[interop\]\r?\n)enabled=false(?=\r?\n|$)'
+        if ([regex]::Matches($configText, $interopPattern).Count -ne 1) {
+            throw 'files/wsl.conf must contain exactly one disabled Windows interop setting'
+        }
+        $configText = [regex]::Replace($configText, $interopPattern, '${1}enabled=true')
+        [System.IO.File]::WriteAllText($stagedWslConfig, $configText, [System.Text.UTF8Encoding]::new($false))
+    }
+    if ($WindowsScratchDir) {
+        $configText = [System.IO.File]::ReadAllText($stagedWslConfig)
+        $bootPattern = '(?m)(^\[boot\]\r?\n)systemd=true(?=\r?\n|$)'
+        if ([regex]::Matches($configText, $bootPattern).Count -ne 1) {
+            throw 'files/wsl.conf must contain exactly one systemd boot setting'
+        }
+        $configText = [regex]::Replace($configText, $bootPattern, '${1}systemd=true' + "`n" + 'command=/usr/local/lib/wsl-dev-builder/mount-windows-scratch.sh')
+        [System.IO.File]::WriteAllText($stagedWslConfig, $configText, [System.Text.UTF8Encoding]::new($false))
+    }
     Copy-Item -LiteralPath $wslDistributionConfig -Destination (Join-Path $overlayDirectory 'opt/wsl-dev-builder/files/wsl-distribution.conf')
     ConvertTo-LinuxLineEndings (Join-Path $overlayDirectory 'opt/wsl-dev-builder')
-    Invoke-Checked $tarPath @('-rf', $rootfsTar, '-C', $overlayDirectory, 'opt/wsl-dev-builder/provision.sh', 'opt/wsl-dev-builder/base-utilities.txt', 'opt/wsl-dev-builder/selected-packages.txt', 'opt/wsl-dev-builder/packages', 'opt/wsl-dev-builder/files/wsl.conf', 'opt/wsl-dev-builder/files/wsl-distribution.conf', 'opt/wsl-dev-builder/files/isolation-runtime.sh', 'opt/wsl-dev-builder/files/onboard-agent-distro') 'adding provisioning inputs to rootfs archive'
+    Invoke-Checked $tarPath @('-rf', $rootfsTar, '-C', $overlayDirectory, 'opt/wsl-dev-builder/provision.sh', 'opt/wsl-dev-builder/base-utilities.txt', 'opt/wsl-dev-builder/selected-packages.txt', 'opt/wsl-dev-builder/packages', 'opt/wsl-dev-builder/files/wsl.conf', 'opt/wsl-dev-builder/files/wsl-distribution.conf', 'opt/wsl-dev-builder/files/isolation-runtime.sh', 'opt/wsl-dev-builder/files/mount-windows-scratch.sh', 'opt/wsl-dev-builder/files/configure-windows-scratch.sh', 'opt/wsl-dev-builder/files/onboard-agent-distro') 'adding provisioning inputs to rootfs archive'
 
     Write-Host '[3/6] Importing rootfs into WSL2'
     Invoke-Checked wsl.exe @('--import', $stagingName, $storagePath, $rootfsTar, '--version', '2') 'WSL import'
     $stagingImported = $true
 
     Write-Host '[4/6] Provisioning and validating Linux image'
-    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', $provisionPath, $linuxConfigDir, '/opt/wsl-dev-builder/base-utilities.txt', '/opt/wsl-dev-builder/selected-packages.txt', '/opt/wsl-dev-builder/packages') 'Linux provisioning'
+    $windowsInteropMode = if ($AllowWindowsInterop -or $WindowsScratchDir) { 'enabled' } else { 'disabled' }
+    $windowsScratchMode = if ($WindowsScratchDir) { 'enabled' } else { 'disabled' }
+    Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', $provisionPath, $linuxConfigDir, '/opt/wsl-dev-builder/base-utilities.txt', '/opt/wsl-dev-builder/selected-packages.txt', '/opt/wsl-dev-builder/packages', $windowsInteropMode, $windowsScratchMode) 'Linux provisioning'
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'root', '--', 'bash', '-lc', 'dpkg --audit; test -f /etc/wsl.conf; test -f /etc/wsl-distribution.conf') 'final Linux validation'
     Invoke-Checked wsl.exe @('-d', $stagingName, '-u', 'ubuntu', '--', 'bash', '-i', '-c', 'set -e; while IFS= read -r tool; do command -v "$tool"; done < /usr/local/lib/wsl-dev-builder/required-tools.txt') 'fresh ubuntu shell tooling validation'
 
@@ -248,17 +275,21 @@ try {
         ''
         "Ubuntu base image: $imageReference"
         "Build date: $date"
+        "Windows interop: $windowsInteropMode"
+        "Windows scratch directory: $windowsScratchMode"
     )
     if (-not [string]::IsNullOrWhiteSpace($ImageComment)) {
         $manifestLines += @('', 'Image comment:') + @($ImageComment -split "`r?`n")
     }
+    $replayInteropArgument = if ($AllowWindowsInterop) { ' -AllowWindowsInterop' } else { '' }
+    $replayScratchArgument = if ($WindowsScratchDir) { ' -WindowsScratchDir' } else { '' }
     $rebuildCommand = @(
         '& .\build.ps1 `'
         "  -DistributionDirectory $(ConvertTo-PowerShellLiteral $replayDistributionDirectory) ``"
         "  -BaseUtilities $(ConvertTo-PowerShellArrayLiteral $selectedBaseUtilities) ``"
         "  -Packages $(ConvertTo-PowerShellArrayLiteral $resolvedPackageSpecs) ``"
         "  -ImageName $(ConvertTo-PowerShellLiteral $ImageName) ``"
-        "  -ImageComment $(ConvertTo-PowerShellLiteral $ImageComment)"
+        "  -ImageComment $(ConvertTo-PowerShellLiteral $ImageComment)$replayInteropArgument$replayScratchArgument"
     ) -join "`n"
     $manifestLines += @('', 'Installed modules:') + @($resolvedModules -split "`n") + @('', 'Base utilities:') + $selectedBaseUtilities + @('', 'Rebuild command:', $rebuildCommand)
     [System.IO.File]::WriteAllLines($manifestTemp, $manifestLines, [System.Text.UTF8Encoding]::new($false))

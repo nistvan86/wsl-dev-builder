@@ -11,16 +11,19 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - `build.ps1` is the thin Windows orchestration layer. It owns prerequisite checks, WSL lifecycle operations, archive staging, export, artifact naming, and cleanup.
 - `files/provision.sh` is the authoritative portable Linux provisioning policy. It resolves selected package modules, installs their declared system dependencies, runs provisioning contributors, and installs their onboarding/validation contributions.
 - `build.settings.psd1` is an optional, ignored user settings file. `build.settings.psd1.example` is the committed template. Keep it restricted to `DistributionDirectory`, `BaseUtilities`, and `Packages` data.
-- `install.ps1` installs a named artifact from `dist/` without launching it; it prints the explicit interactive launch command for OOBE onboarding. `install.settings.psd1` is its optional, ignored local configuration; its committed template contains only `InstanceDirectory`. The `-InstanceDirectory` parameter overrides that setting for one installation.
+- `install.ps1` installs a named artifact from `dist/` without interactive launch; it prints the explicit launch command for OOBE onboarding. For scratch-enabled images it performs non-interactive root configuration and validation, then terminates the instance. `install.settings.psd1` is its optional, ignored local configuration; its committed template contains only `InstanceDirectory`. The `-InstanceDirectory` parameter overrides that setting for one installation.
 - `packages/<name>/` defines an installable module. Package selections use `name[:version]`; the version is optional and module directories remain version-neutral. It may contain `dependencies.txt`, `system-packages.txt`, `required-tools.txt`, `provision.sh`, `onboard-init.sh`, and `onboard.sh`. Dependency resolution is depth-first and fails on missing modules, cycles, or conflicting versions; a selected version is passed as the first argument to `provision.sh`, while an empty argument requests the module's latest supported version. A version-aware `provision.sh` must write the concrete selected version to `$WSL_DEV_BUILDER_RESOLVED_VERSION_FILE` when that environment variable is set, so image metadata and rebuild commands are explicit. `onboard-init.sh` contributors are sourced before opt-in onboarding scripts; `onboard.sh` must detect the installed binary version itself when onboarding has version-specific behavior. Provision and onboarding hooks run only for the resolved selection.
 - `files/` contains all non-PowerShell operational scripts and WSL configuration:
   - `provision.sh`
   - `isolation-runtime.sh`
+  - `mount-windows-scratch.sh`
+  - `configure-windows-scratch.sh`
   - `onboard-agent-distro`
   - `wsl.conf`
   - `wsl-distribution.conf`
 - The staging distro is exactly `__wsl_dev_builder`. It is reserved for this project. Cleanup may terminate or unregister only that exact name; never use partial or wildcard matching.
 - The base image is `ubuntu:24.04`. `crane.exe` is supplied beside `build.ps1`; do not download it automatically and do not add Docker or Podman as a build dependency.
+- Keep project-specific build recipes in `etc/example-distros.txt`; keep the README, project guide, and instance skill generic.
 - Keep the acquisition/staging boundary separate from provisioning so the backend can later change without rewriting Linux policy. Do not add WSLC support until it is stable and explicitly requested.
 
 ## Build and artifact invariants
@@ -31,7 +34,7 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - Provisioning and every required validation are fail-closed: a failure must prevent export.
 - Export to a temporary location first; only move a successful export to its final artifact name.
 - Name artifacts `<image-name>.wsl` (default image name: `ubuntu-dev`). `build.ps1 -ImageName` may choose another validated basename. Never overwrite an existing artifact or its `<image>.wsl.txt` companion manifest unless `build.ps1 -Rebuild` is explicitly requested.
-- Publish `<image>.wsl.txt` beside each artifact. It must record the OCI base image, build date, resolved modules, selected base utilities, the optional `build.ps1 -ImageComment`, and a fully resolved `build.ps1` replay command independent of local settings.
+- Publish `<image>.wsl.txt` beside each artifact. It must record the OCI base image, build date, resolved modules, selected base utilities, Windows interop and scratch modes, the optional `build.ps1 -ImageComment`, and a fully resolved `build.ps1` replay command independent of local settings.
 - On ordinary failure, clean temporary files and `__wsl_dev_builder` without masking the primary error. `build.ps1 -KeepStagingOnFailure` is the supported debugging path when the staging filesystem must be inspected.
 - Preserve the pre-existing `ubuntu` account. It must remain UID/GID `1000`; do not rename or recreate it.
 
@@ -59,13 +62,15 @@ The current target is **reduced accidental Windows integration and reduced Linux
 - Keep `/etc/wsl.conf` configured with:
   - DrvFs automount disabled;
   - `/etc/fstab` processing disabled;
-  - Windows interop disabled;
+  - Windows interop disabled by default; `build.ps1 -WindowsScratchDir` enables it together with a dedicated scratch mount. Retain `-AllowWindowsInterop` as an interop-only option;
   - Windows PATH injection disabled;
   - systemd enabled;
   - `ubuntu` as the default user.
 - Keep `sudo` absent. `ubuntu` must not belong to `sudo`, `wheel`, `docker`, `lxd`, `disk`, `libvirt`, or `kvm`.
 - Keep root and `ubuntu` passwords locked. A trusted host user may deliberately run `wsl -d <name> -u root` for maintenance.
 - Keep build-time validation for identity, groups, sudo absence, DrvFs mounts, `/mnt/c` and `/mnt/d` mounts, normal Windows executable lookup, failed manual DrvFs mounting, inaccessible Docker/Podman/containerd sockets, protected-path writability, and required tooling.
+- Validate the image's interop and scratch settings against the explicit build choice, and record both in its manifest and replay command. Enabling interop permits general Windows process launching; the scratch mount is a workflow convenience, not a WSL security boundary.
+- For scratch-enabled images, the installer must create one Windows directory beside the instance VHDX, configure its absolute source path inside that instance, mount only it at `/mnt/windows-scratch` on startup, and validate the mount plus Windows executable launch from that working directory after restart. If no instance root was configured, choose a deterministic per-user drive-letter location rather than WSL's opaque default. Leave ordinary installation behavior unchanged.
 - Keep SUID/SGID stripping and high-risk Linux capability auditing. `libcap2-bin` is build-only tooling and must be removed before export.
 - Do not make network probe results build failures by default; report them.
 - Do not give the agent separate Windows-side capabilities—such as Docker APIs, MCP/IDE host tools, or host credential access—that would bypass the WSL policy.

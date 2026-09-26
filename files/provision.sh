@@ -5,6 +5,8 @@ CONFIG_DIR="${1:-}"
 BASE_UTILITIES_FILE="${2:-}"
 SELECTED_PACKAGES_FILE="${3:-}"
 PACKAGES_DIR="${4:-}"
+WINDOWS_INTEROP_MODE="${5:-disabled}"
+WINDOWS_SCRATCH_MODE="${6:-disabled}"
 
 log() { printf '[provision] %s\n' "$*"; }
 die() { printf '[provision] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -16,6 +18,9 @@ command -v apt-get >/dev/null || die 'apt-get is unavailable'
 [[ -f "$BASE_UTILITIES_FILE" ]] || die 'base utilities file is required'
 [[ -f "$SELECTED_PACKAGES_FILE" ]] || die 'selected packages file is required'
 [[ -d "$PACKAGES_DIR" ]] || die 'packages directory is required'
+[[ "$WINDOWS_INTEROP_MODE" == disabled || "$WINDOWS_INTEROP_MODE" == enabled ]] || die 'Windows interop mode must be enabled or disabled'
+[[ "$WINDOWS_SCRATCH_MODE" == disabled || "$WINDOWS_SCRATCH_MODE" == enabled ]] || die 'Windows scratch mode must be enabled or disabled'
+[[ "$WINDOWS_SCRATCH_MODE" == disabled || "$WINDOWS_INTEROP_MODE" == enabled ]] || die 'Windows scratch requires interop'
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 
 read_list_file() {
@@ -228,19 +233,36 @@ install -o root -g root -m 0644 "$CONFIG_DIR/wsl-distribution.conf" /etc/wsl-dis
 install -d -o root -g root -m 0755 /usr/local/lib/wsl-dev-builder
 install -o root -g root -m 0755 "$CONFIG_DIR/isolation-runtime.sh" /usr/local/lib/wsl-dev-builder/isolation-runtime.sh
 install -o root -g root -m 0755 "$CONFIG_DIR/onboard-agent-distro" /usr/local/bin/onboard-agent-distro
+if [[ "$WINDOWS_SCRATCH_MODE" == enabled ]]; then
+  install -o root -g root -m 0755 "$CONFIG_DIR/mount-windows-scratch.sh" /usr/local/lib/wsl-dev-builder/mount-windows-scratch.sh
+  install -o root -g root -m 0755 "$CONFIG_DIR/configure-windows-scratch.sh" /usr/local/lib/wsl-dev-builder/configure-windows-scratch.sh
+  install -o root -g root -m 0644 /dev/null /usr/local/lib/wsl-dev-builder/windows-scratch-enabled
+fi
 
 validate_isolation_config() {
-  local section=''
+  local section='' automount_enabled='' automount_fstab='' interop_enabled='' interop_path=''
   while IFS= read -r line || [[ -n "$line" ]]; do
     case "$line" in
       "["*"]") section="$line" ;;
-      enabled=false) [[ "$section" == '[automount]' ]] && automount_enabled=false ;;
-      mountFsTab=false) [[ "$section" == '[automount]' ]] && automount_fstab=false ;;
-      appendWindowsPath=false) [[ "$section" == '[interop]' ]] && interop_path=false ;;
     esac
-    [[ "$section" == '[interop]' && "$line" == 'enabled=false' ]] && interop_enabled=false
+    case "$section:$line" in
+      '[automount]:enabled=false') [[ -z "$automount_enabled" ]] || die 'duplicate DrvFs automount setting'; automount_enabled=false ;;
+      '[automount]:enabled='*) die 'DrvFs automount must be disabled' ;;
+      '[automount]:mountFsTab=false') [[ -z "$automount_fstab" ]] || die 'duplicate fstab setting'; automount_fstab=false ;;
+      '[automount]:mountFsTab='*) die 'fstab processing must be disabled' ;;
+      '[interop]:enabled=false') [[ -z "$interop_enabled" ]] || die 'duplicate Windows interop setting'; interop_enabled=disabled ;;
+      '[interop]:enabled=true') [[ -z "$interop_enabled" ]] || die 'duplicate Windows interop setting'; interop_enabled=enabled ;;
+      '[interop]:enabled='*) die 'invalid Windows interop setting' ;;
+      '[interop]:appendWindowsPath=false') [[ -z "$interop_path" ]] || die 'duplicate Windows PATH setting'; interop_path=false ;;
+      '[interop]:appendWindowsPath='*) die 'Windows PATH injection must be disabled' ;;
+    esac
   done < /etc/wsl.conf
-  [[ "${automount_enabled:-true}" == false && "${automount_fstab:-true}" == false && "${interop_enabled:-true}" == false && "${interop_path:-true}" == false ]] || die '/etc/wsl.conf does not disable automount and Windows interop'
+  [[ "$automount_enabled" == false && "$automount_fstab" == false && "$interop_enabled" == "$WINDOWS_INTEROP_MODE" && "$interop_path" == false ]] || die '/etc/wsl.conf does not match the requested isolation and Windows interop policy'
+  if [[ "$WINDOWS_SCRATCH_MODE" == enabled ]]; then
+    grep -Fxq 'command=/usr/local/lib/wsl-dev-builder/mount-windows-scratch.sh' /etc/wsl.conf || die 'Windows scratch boot command is missing'
+  else
+    ! grep -Eq '^command=' /etc/wsl.conf || die 'unexpected WSL boot command'
+  fi
 }
 validate_isolation_config
 for unit in systemd-resolved.service systemd-networkd.service NetworkManager.service systemd-tmpfiles-setup.service systemd-tmpfiles-clean.service systemd-tmpfiles-clean.timer systemd-tmpfiles-setup-dev-early.service systemd-tmpfiles-setup-dev.service tmp.mount; do ln -sfn /dev/null "/etc/systemd/system/$unit"; done
@@ -260,6 +282,11 @@ done
 [[ "$(passwd -S root | awk '{print $2}')" == L* ]] || die 'root password is not locked'
 [[ "$(passwd -S ubuntu | awk '{print $2}')" == L* ]] || die 'ubuntu password is not locked'
 [[ "$(stat -c '%u:%g:%a' /etc/wsl.conf)" == '0:0:644' ]] || die '/etc/wsl.conf has incorrect metadata'
+if [[ "$WINDOWS_SCRATCH_MODE" == enabled ]]; then
+  [[ "$(stat -c '%u:%g:%a' /usr/local/lib/wsl-dev-builder/mount-windows-scratch.sh)" == '0:0:755' ]] || die 'Windows scratch mount helper has incorrect metadata'
+  [[ "$(stat -c '%u:%g:%a' /usr/local/lib/wsl-dev-builder/configure-windows-scratch.sh)" == '0:0:755' ]] || die 'Windows scratch configuration helper has incorrect metadata'
+  [[ ! -e /etc/wsl-dev-builder/windows-scratch-path ]] || die 'reusable image contains an instance-specific Windows path'
+fi
 [[ "$(stat -c '%u:%g:%a' /etc/wsl-distribution.conf)" == '0:0:644' ]] || die '/etc/wsl-distribution.conf has incorrect metadata'
 grep -Fxq '[oobe]' /etc/wsl-distribution.conf || die 'WSL OOBE section is missing'
 grep -Fxq 'command=/usr/local/bin/onboard-agent-distro' /etc/wsl-distribution.conf || die 'WSL onboarding OOBE command is missing'

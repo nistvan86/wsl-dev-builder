@@ -30,15 +30,24 @@ Use parameters to replace or extend settings for one build:
 .\build.ps1 -Packages github,nodejs -BaseUtilities git,make,curl
 
 # Add to the configured selections, choose another artifact directory, and name the image.
-.\build.ps1 -AddPackages my-module -AddBaseUtilities cmake -DistributionDirectory D:\WSL\images -ImageName ubuntu-dev-retroos
+.\build.ps1 -AddPackages my-module -AddBaseUtilities cmake -DistributionDirectory D:\WSL\images -ImageName ubuntu-dev-custom
 
 # Add purpose/context to the companion manifest.
 .\build.ps1 -ImageComment @'
-Retro game development environment with the retroos toolchain.
+Development environment with project-specific tools.
 '@
+
+# Enable a dedicated Windows scratch directory and Windows-process interop.
+.\build.ps1 -ImageName ubuntu-dev-windows-scratch -WindowsScratchDir
 ```
 
-Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. Use `-ImageName` to replace the default `ubuntu-dev` artifact-name prefix. Each image has an adjacent `.wsl.txt` manifest listing its Ubuntu base image, resolved modules, selected base utilities, an optional `-ImageComment`, and a fully resolved `build.ps1` replay command that does not depend on local settings. Project-contained output directories are recorded relative to `build.ps1` in that command. A target image or manifest conflict stops the build; pass `-Rebuild` only when intentionally refreshing that exact image. The builder reserves `__wsl_dev_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
+Package modules live in `packages/<name>/`; Codex automatically selects its Node.js dependency. Use `-ImageName` to replace the default `ubuntu-dev` artifact-name prefix. Each image has an adjacent `.wsl.txt` manifest listing its Ubuntu base image, resolved modules, selected base utilities, Windows interop and scratch modes, an optional `-ImageComment`, and a fully resolved `build.ps1` replay command that does not depend on local settings. Project-contained output directories are recorded relative to `build.ps1` in that command. A target image or manifest conflict stops the build; pass `-Rebuild` only when intentionally refreshing that exact image. The builder reserves `__wsl_dev_builder` as a disposable staging distro and may unregister exactly that distro during cleanup.
+
+Project-specific build recipes are collected in [`etc/example-distros.txt`](etc/example-distros.txt).
+
+`-WindowsScratchDir` enables Windows executable handoff: it enables WSL interop, installs a boot-time mount helper, and marks the image for per-instance scratch setup. The installer creates `windows-scratch` beside the instance's VHDX and mounts only that directory at `/mnt/windows-scratch`. Automatic drive mounts, `/etc/fstab` processing, and Windows PATH injection remain disabled. Build-time isolation validation still runs; installation also validates the one allowed mount and a Windows executable launch. Toolchains must be selected separately.
+
+Launch Windows programs with their working directory on the scratch mount, for example `cd /mnt/windows-scratch && ./my-app.exe`. Keep relative assets there too. Interop allows Windows programs to run as the signed-in Windows user; it is not restricted to the scratch folder. `-AllowWindowsInterop` enables interop alone without creating a scratch mount.
 
 ## Install and onboard
 
@@ -48,15 +57,15 @@ Copy the optional instance-location template when you want newly installed distr
 Copy-Item .\install.settings.psd1.example .\install.settings.psd1
 ```
 
-Set `InstanceDirectory` in that ignored file, such as `D:\WSL\instances`. Leave it empty or omit the file to let WSL choose its default location.
+Set `InstanceDirectory` in that ignored file, such as `D:\WSL\instances`. Leave it empty or omit the file to let WSL choose its default location for ordinary images. Scratch-enabled images instead default to `%LOCALAPPDATA%\wsl-dev-builder\instances\<DistroName>` so the installer can place the scratch folder beside the VHDX. A scratch-enabled image requires a drive-letter instance location.
 
-Install an artifact by filename from `dist/`. The wrapper validates the image, ensures the distro name is unused, creates `<InstanceDirectory>\<DistroName>` when configured, and does not launch the distro:
+Install an artifact by filename from `dist/`. The wrapper validates the image, ensures the distro name is unused, and creates `<InstanceDirectory>\<DistroName>` when configured. For a scratch-enabled image it also configures and validates the dedicated mount non-interactively, then terminates the distro without starting interactive onboarding:
 
 ```powershell
 .\install.ps1 -ImageName ubuntu-dev.wsl -DistroName dev-foo
 
 # Override the configured/default location for one instance.
-.\install.ps1 -ImageName ubuntu-dev-retroos.wsl -DistroName dev-retroos -InstanceDirectory D:\WSL\instances
+.\install.ps1 -ImageName ubuntu-dev-custom.wsl -DistroName dev-custom -InstanceDirectory D:\WSL\instances
 ```
 
 Launch the installed distro explicitly with `wsl.exe -d <distro-name>`. The first interactive launch automatically runs the distro-owned onboarding flow, which performs GitHub HTTPS authentication and Codex device authentication inside the installed distro. Credentials are per-distro and are never included in the image or copied from Windows. If onboarding is interrupted or fails, WSL keeps OOBE incomplete and retries it on the next interactive launch.

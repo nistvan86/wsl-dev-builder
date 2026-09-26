@@ -1,5 +1,6 @@
 @{
     # Root directory for new WSL distro storage. Use an absolute Windows path.
-    # Leave empty to let WSL choose its default storage location.
+    # Leave empty to let WSL choose its default location for ordinary images.
+    # Scratch-enabled images default to %LOCALAPPDATA%\wsl-dev-builder\instances.
     InstanceDirectory = ''
 }

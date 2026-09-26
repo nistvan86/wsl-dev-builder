@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 fail() { printf '[isolation] FAILED: %s\n' "$*" >&2; exit 1; }
 require() { "$@" || fail "invariant failed: $*"; }
+mount_mode="${1:-isolated}"
+[[ "$mount_mode" == isolated || "$mount_mode" == windows-scratch ]] || fail 'invalid mount validation mode'
 
 # This validator is executed directly, not through an interactive shell. Make
 # user-local tools and the provisioned nvm Node.js installation explicit.
@@ -24,7 +26,17 @@ for forbidden_group in sudo wheel docker lxd disk libvirt kvm; do
   fi
 done
 
-! findmnt -rn -t drvfs | grep -q . || fail 'a DrvFs filesystem is mounted'
+drvfs_mounts=$(findmnt -rn -o TARGET,OPTIONS | grep -F 'aname=drvfs;path=' || true)
+if [[ "$mount_mode" == isolated ]]; then
+  [[ -z "$drvfs_mounts" ]] || fail 'a DrvFs filesystem is mounted'
+else
+  [[ "$(printf '%s\n' "$drvfs_mounts" | wc -l)" == 1 ]] || fail 'expected exactly one DrvFs mount'
+  [[ "$drvfs_mounts" == /mnt/windows-scratch\ * ]] || fail 'unexpected DrvFs mount target'
+  [[ -f /etc/wsl-dev-builder/windows-scratch-path ]] || fail 'Windows scratch path file is missing'
+  expected_source=$(< /etc/wsl-dev-builder/windows-scratch-path)
+  actual_source=$(findmnt -n -M /mnt/windows-scratch -o SOURCE)
+  [[ "${actual_source,,}" == "${expected_source,,}" ]] || fail 'Windows scratch mount source differs from instance configuration'
+fi
 if [[ -e /mnt/c ]] && findmnt -rn /mnt/c >/dev/null; then fail '/mnt/c is mounted'; fi
 if [[ -e /mnt/d ]] && findmnt -rn /mnt/d >/dev/null; then fail '/mnt/d is mounted'; fi
 for windows_executable in cmd.exe powershell.exe explorer.exe; do
