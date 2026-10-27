@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $stagingName = '__wsl_dev_builder'
 $imageReference = 'ubuntu:24.04'
-$cranePath = Join-Path $scriptRoot 'crane.exe'
+$wslcPath = $null
 $tarPath = $null
 $systemTarPath = if ($env:SystemRoot) { Join-Path $env:SystemRoot 'System32\tar.exe' } else { $null }
 if ($systemTarPath -and (Test-Path -LiteralPath $systemTarPath -PathType Leaf)) {
@@ -123,6 +123,47 @@ function Remove-StagingDistro {
     try { Invoke-Checked wsl.exe @('--unregister', $stagingName) 'staging distro cleanup' } catch { }
 }
 
+function Export-BaseRootfs {
+    param([string]$Destination, [string]$TemporaryDirectory, [string]$Architecture)
+    $containerName = 'wsl-builder-' + [guid]::NewGuid().ToString('N')
+    $cidFile = Join-Path $TemporaryDirectory 'container.cid'
+    $cleanupTarget = $containerName
+    $removed = $false
+    try {
+        Invoke-Checked $wslcPath @('create', '--name', $containerName, '--cidfile', $cidFile, '--pull', 'always', $imageReference) 'WSLC image acquisition' | Out-Host
+        $containerId = [System.IO.File]::ReadAllText($cidFile).Trim()
+        if ($containerId -notmatch '^[a-f0-9]{64}$') { throw 'WSLC returned an invalid container ID' }
+        $cleanupTarget = $containerId
+        $containerJson = & $wslcPath container inspect --format json $containerId
+        if ($LASTEXITCODE -ne 0) { throw 'WSLC container inspection failed' }
+        $containers = @(ConvertFrom-Json ($containerJson -join "`n"))
+        if ($containers.Count -ne 1) { throw 'WSLC did not return exactly one container' }
+        # Inspect the immutable image ID actually used, rather than the mutable tag.
+        $imageJson = & $wslcPath image inspect --format json $containers[0].Image
+        if ($LASTEXITCODE -ne 0) { throw 'WSLC image inspection failed' }
+        $images = @(ConvertFrom-Json ($imageJson -join "`n"))
+        if ($images.Count -ne 1) { throw 'WSLC did not return exactly one image' }
+        $image = $images[0]
+        if ($image.Os -ne 'linux' -or $image.Architecture -ne $Architecture) {
+            throw "WSLC selected $($image.Os)/$($image.Architecture), expected linux/$Architecture"
+        }
+        Invoke-Checked $wslcPath @('export', '--output', $Destination, $containerId) 'WSLC rootfs export' | Out-Host
+        if (-not (Test-Path -LiteralPath $Destination -PathType Leaf) -or (Get-Item -LiteralPath $Destination).Length -eq 0) {
+            throw 'WSLC export did not produce a nonempty rootfs archive'
+        }
+        Invoke-Checked $tarPath @('-tf', $Destination) 'rootfs archive validation' | Out-Null
+        Invoke-Checked $wslcPath @('rm', $containerId) 'WSLC acquisition container cleanup' | Out-Host
+        $removed = $true
+        $image
+    }
+    finally {
+        if (-not $removed) {
+            try { Invoke-Checked $wslcPath @('rm', $cleanupTarget) 'WSLC acquisition container cleanup' | Out-Host }
+            catch { Write-Warning "Could not clean acquisition container ${cleanupTarget}: $($_.Exception.Message)" }
+        }
+    }
+}
+
 try {
     $settings = @{}
     if (Test-Path -LiteralPath $settingsPath -PathType Leaf) {
@@ -157,8 +198,25 @@ try {
     if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
         throw 'wsl.exe was not found. Enable Windows Subsystem for Linux and Virtual Machine Platform in Windows Features, reboot, and run "wsl --install" from an elevated PowerShell prompt.'
     }
-    if (-not (Test-Path -LiteralPath $cranePath -PathType Leaf)) {
-        throw "crane.exe was not found beside build.ps1. Download the Windows binary from https://github.com/google/go-containerregistry/releases, rename it to crane.exe, and place it here: $cranePath"
+    $wslcCommand = Get-Command wslc.exe -ErrorAction SilentlyContinue
+    if (-not $wslcCommand) { throw 'wslc.exe was not found. Run wsl --update to install stable WSL 3.0.1 or newer.' }
+    $wslcPath = $wslcCommand.Source
+    $wslcVersionText = (& $wslcPath version | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw 'WSLC version check failed; run wsl --update and retry' }
+    if ($wslcVersionText -notmatch '(?m)^wslc\s+(\d+\.\d+\.\d+(?:\.\d+)?)\s*$') { throw 'Could not determine WSLC version' }
+    $wslcVersion = [version]$Matches[1]
+    if ($wslcVersion -lt [version]'3.0.1') { throw 'Stable WSL 3.0.1 or newer is required; run wsl --update' }
+    foreach ($capability in @(
+        @{ Command = @('create', '--help'); Options = @('--cidfile', '--pull') },
+        @{ Command = @('export', '--help'); Options = @('--output') },
+        @{ Command = @('image', 'inspect', '--help'); Options = @('--format') }
+    )) {
+        $commandArguments = $capability.Command
+        $capabilityHelp = (& $wslcPath @commandArguments | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw 'WSLC capability check failed; run wsl --update' }
+        foreach ($option in $capability.Options) {
+            if ($capabilityHelp -notmatch [regex]::Escape($option)) { throw "WSLC is missing required option $option; run wsl --update" }
+        }
     }
     if ([string]::IsNullOrWhiteSpace($tarPath)) {
         throw "tar.exe was not found. It is normally included with Windows; place a compatible tar.exe beside build.ps1 if it is missing: $(Join-Path $scriptRoot 'tar.exe')"
@@ -188,8 +246,7 @@ try {
     foreach ($option in @('--import', '--export', '--terminate', '--unregister', '--version')) {
         if ($help -notmatch [regex]::Escape($option)) { throw "installed WSL does not advertise required option $option" }
     }
-    & wsl.exe --version *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'WSL --version is unavailable; update WSL before building' }
+    $wslVersionText = Invoke-WslOutput @('--version') 'WSL version check'
     $distros = Get-DistroNames
     if ($distros -contains $stagingName) { Write-Host "Removing reserved staging distro $stagingName"; Remove-StagingDistro }
 
@@ -199,9 +256,13 @@ try {
     $storagePath = Join-Path $workingDirectory 'storage'
     New-Item -ItemType Directory -Path $storagePath -Force | Out-Null
 
-    Write-Host "[1/6] Exporting $imageReference with crane"
-    $architecture = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-    Invoke-Checked $cranePath @('--platform', "linux/$architecture", 'export', $imageReference, $rootfsTar) 'crane export'
+    Write-Host "[1/6] Acquiring $imageReference with WSLC"
+    $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
+        'Arm64' { 'arm64' }
+        'X64' { 'amd64' }
+        default { throw 'Only x64 and ARM64 hosts are supported' }
+    }
+    $baseImage = Export-BaseRootfs $rootfsTar $workingDirectory $architecture
 
     Write-Host '[2/6] Adding provisioning inputs to disposable rootfs archive'
     $linuxConfigDir = '/opt/wsl-dev-builder/files'
@@ -274,6 +335,12 @@ try {
         'WSL Dev Builder image manifest'
         ''
         "Ubuntu base image: $imageReference"
+        'Acquisition backend: wslc'
+        "WSLC version: $wslcVersion"
+        "WSL version information: $($wslVersionText -replace '\r?\n', '; ')"
+        "Base platform: linux/$architecture"
+        "Base image ID: $($baseImage.Id)"
+        "Base repository digests: $(@($baseImage.RepoDigests) -join ', ')"
         "Build date: $date"
         "Windows interop: $windowsInteropMode"
         "Windows scratch directory: $windowsScratchMode"

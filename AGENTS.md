@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This project builds a reusable Ubuntu 24.04 WSL development and agent image. `build.ps1` exports the official `ubuntu:24.04` OCI filesystem with a user-supplied `crane.exe`, provisions it in a temporary WSL distro, validates it, and exports a date-versioned `.wsl` artifact.
+This project builds a reusable Ubuntu 24.04 WSL development and agent image. `build.ps1` acquires the official `ubuntu:24.04` OCI filesystem with `wslc.exe`, provisions it in a temporary WSL distro, validates it, and exports a `.wsl` artifact.
 
 The current target is **reduced accidental Windows integration and reduced Linux privilege escalation**, not a hard VM-grade security boundary.
 
@@ -22,9 +22,9 @@ The current target is **reduced accidental Windows integration and reduced Linux
   - `wsl.conf`
   - `wsl-distribution.conf`
 - The staging distro is exactly `__wsl_dev_builder`. It is reserved for this project. Cleanup may terminate or unregister only that exact name; never use partial or wildcard matching.
-- The base image is `ubuntu:24.04`. `crane.exe` is supplied beside `build.ps1`; do not download it automatically and do not add Docker or Podman as a build dependency.
+- The base image is `ubuntu:24.04`. Require stable WSL 3.0.1 or newer with `wslc.exe`; do not update it automatically or add Docker or Podman as a build dependency. Freshly pull into a uniquely named stopped container, verify its native Linux platform, export its filesystem, and remove only that invocation's container. Leave shared WSLC images and sessions alone.
 - Keep project-specific build recipes in `etc/example-distros.txt`; keep the README, project guide, and instance skill generic.
-- Keep the acquisition/staging boundary separate from provisioning so the backend can later change without rewriting Linux policy. Do not add WSLC support until it is stable and explicitly requested.
+- Keep the acquisition/staging boundary separate from provisioning. WSLC produces the disposable rootfs tar; Linux provisioning and validation continue in the reserved WSL distro.
 
 ## Build and artifact invariants
 

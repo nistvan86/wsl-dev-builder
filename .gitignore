@@ -1,4 +1,4 @@
-# Local image-builder dependency (download/place beside build.ps1; do not commit)
+# Legacy local acquisition tool (no longer required; do not commit)
 crane.exe
 
 # Local builder and instance settings plus generated WSL distribution artifacts

@@ -1,13 +1,16 @@
 # Ubuntu 24.04 WSL development image builder
 
-Builds a reusable Ubuntu 24.04 `.wsl` image for an isolated developer/agent environment. It uses `crane.exe` to export the official `ubuntu:24.04` OCI image, provisions and validates it in a temporary WSL 2 distro, then exports a date-versioned artifact. Docker and Podman are not required.
+Builds a reusable Ubuntu 24.04 `.wsl` image for an isolated developer/agent environment. It uses `wslc.exe` to acquire the official `ubuntu:24.04` OCI image and export a stopped container's filesystem, provisions and validates it in a temporary WSL 2 distro, then exports the artifact. Docker and Podman are not required.
 
 ## Prerequisites
 
-- Windows with current WSL 2 and PowerShell.
-- `crane.exe` beside `build.ps1`. Download the Windows binary from the [go-containerregistry releases](https://github.com/google/go-containerregistry/releases).
+- Windows with stable WSL 3.0.1 or newer and PowerShell. Run `wsl --update` if `wslc.exe` is missing or outdated.
 - `tar.exe` (normally included with Windows; a local `tar.exe` beside `build.ps1` is also accepted).
 - Network access to download dependencies.
+
+The builder freshly pulls the base image, exports a uniquely named container without starting it, and removes that container. WSLC retains its shared image cache and service; the builder does not prune them. If acquisition fails, check `wslc version`, container-service availability, enterprise container/registry policy, and registry connectivity. The builder does not change host policy or install updates automatically.
+
+The manifest records the acquisition backend, versions, platform, and base image identity. The replay command still uses the mutable `ubuntu:24.04` tag, so a later build can acquire an updated base.
 
 ## Configure and build
 
